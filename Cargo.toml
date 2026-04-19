@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+lalrpop-util ="0.23.1"
+
+[build-dependencies]
+# must be the same version as lalrpop runtime
+# default features are [lexer, Unicode] and we need all of them
+lalrpop = "0.23.1"
