@@ -1,0 +1,52 @@
+name: rust
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings" # fail on warnings
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target (optional)
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: > # invalidate target cache on grammar change
+            ${{ runner.os }}-target-
+            ${{ hashFiles('**/Cargo.lock') }}-
+            ${{ hashFiles('**/*.lalrpop') }}
+      - name: Check # check fails faster than full build
+        run: cargo check --all-targets
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings # fail on warnings
+
+      - name: Build
+        run: cargo build --all-targets --verbose
+
+      - name: Test
+        run: cargo test --all --verbose
