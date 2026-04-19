@@ -1,33 +1,23 @@
 use std::str::FromStr;
-use crate::ast::{Expr, Opcode};
+use crate::ast;
 
 grammar;
 
-pub Expr: Box<Expr> = { // (1)
-    Expr ExprOp Factor => Box::new(Expr::Op(<>)), // (2)
-    Factor,
+pub Primary: ast::Primary = {
+    "true" => ast::Primary::Bool(true),
+    "false" => ast::Primary::Bool(false),
+    "nil" => ast::Primary::Nil,
+    "this" => ast::Primary::This,
+    <Number> => ast::Primary::Number(<>),
+    <i:Identifier> => ast::Primary::Identifier(i),
+    <s:String> => ast::Primary::String(s),
+    "(" <e:Primary> ")" => ast::Primary::Grouping(Box::new(e)), // TODO: expression instead of priamry
+    "super." <i:Identifier> => ast::Primary::Super(i)
 };
 
-ExprOp: Opcode = { // (3)
-    "+" => Opcode::Add,
-    "-" => Opcode::Sub,
-};
-
-Factor: Box<Expr> = {
-    Factor FactorOp Term => Box::new(Expr::Op(<>)),
-    Term,
-};
-
-FactorOp: Opcode = {
-    "*" => Opcode::Mul,
-    "/" => Opcode::Div,
-};
-
-Term: Box<Expr> = {
-    Num => Box::new(Expr::Number(<>)),
-    "(" <Expr> ")"
-};
-
-Num: i32 = {
-    r"[0-9]+" => i32::from_str(<>).unwrap()
-};
+Number: f64 =
+    <s:r"[0-9]+.?[0-9]*"> => f64::from_str(s).unwrap();
+String: String =
+   <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
+Identifier: String =
+    <s:r"[_a-zA-Z][_0-9a-zA-Z]*"> => s.to_string();
