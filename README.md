@@ -1,6 +1,6 @@
 # Lox compiler
 
-Lox to LLVM compiler written in Rust using ANTLR parser generator.
+Lox to LLVM compiler written in Rust using [LALRPOP](https://github.com/lalrpop/lalrpop) parser generator.
 Lox is functional and objective script language designed by Robert Nystrom in his book - Crafting Interpreters. 
 
 ## Usage Instructions

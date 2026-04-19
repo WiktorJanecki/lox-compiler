@@ -1,0 +1,148 @@
+use std::str::FromStr;
+use crate::ast;
+use crate::ast::{Node, Operator};
+
+grammar<'a>(ctx: &'a mut ast::Ast);
+
+pub Program: () = {
+    <ds:Declaration*> => {
+        for decl in ds{
+           ctx.program.push(decl);
+        }
+    }
+};
+
+Declaration: ast::NodeID = {
+    <Stmt> => ctx.push(Node::Stmt(<>)),
+    "var" <i:Identifier>  <opt:VarDeclValue?>  ";" => {
+        let rhs = if let Some(s) = opt{
+           s
+        } else {ctx.push(Node::Nil)};
+        ctx.push(Node::VarDecl(i, rhs))
+    }
+    // <funcDecl>
+};
+
+VarDeclValue: ast::NodeID = {
+    "=" <Expr>
+}
+
+Stmt: ast::NodeID = {
+    "print" <Expr> ";" => ctx.push(Node::PrintStmt(<>)),
+    <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
+    // ifStmt
+};
+
+Expr: ast::NodeID = {
+    <Assignment> => <>,
+};
+
+Assignment: ast::NodeID ={
+    <p:PrefixAssignment?> <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)),
+    <LogicOr> => <>,
+};
+
+
+PrefixAssignment: ast::NodeID ={
+    <Call> "." => 0 // todo
+};
+
+LogicOr: ast::NodeID = {
+    <LogicAnd> => <>,
+    <f:LogicAnd> <rest:("or" <LogicAnd>)+> => {
+        let mut root = f;
+        for p in rest{
+           root = ctx.push(Node::LogicOr(root, p))
+        }
+       root // TODO: rewrite to left recursion
+    },
+};
+
+LogicAnd: ast::NodeID = {
+    <Equality> => <>,
+    <f:Equality> <rest:("and" <Equality>)+> => {
+        let mut root = f;
+        for p in rest{
+           root = ctx.push(Node::LogicAnd(root, p))
+        }
+       root // TODO: rewrite to left recursion
+    },
+};
+
+Equality: ast::NodeID={
+    <Equality> "==" <Comparison> => {
+        ctx.push(Node::Equality(<>, Operator::Eq, <>))
+    },
+    <Equality> "!=" <Comparison> => {
+        ctx.push(Node::Equality(<>, Operator::Neq, <>))
+    },
+    <Comparison> => <>,
+}
+
+Comparison: ast::NodeID={
+    <Comparison> ">=" <Term> => {
+        ctx.push(Node::Comparison(<>, Operator::Geq, <>))
+    },
+    <Comparison> "<=" <Term> => {
+        ctx.push(Node::Comparison(<>, Operator::Leq, <>))
+    },
+    <Comparison> "<" <Term> => {
+        ctx.push(Node::Comparison(<>, Operator::Less, <>))
+    },
+    <Comparison> ">" <Term> => {
+        ctx.push(Node::Comparison(<>, Operator::Greater, <>))
+    },
+    <Term> => <>,
+}
+
+Term: ast::NodeID={
+    <Term> "+" <Factor> => {
+        ctx.push(Node::Term(<>, Operator::Plus, <>))
+    },
+    <Term> "-" <Factor> => {
+        ctx.push(Node::Term(<>, Operator::Minus, <>))
+    },
+    <Factor> => <>,
+}
+
+Factor: ast::NodeID={
+    <Factor> "*" <Unary> => {
+        ctx.push(Node::Factor(<>, Operator::Mul, <>))
+    },
+    <Factor> "/" <Unary> => {
+        ctx.push(Node::Factor(<>, Operator::Div, <>))
+    },
+    <Unary> => <>,
+}
+
+Unary: ast::NodeID={
+    "!" <Unary> => ctx.push(Node::Unary(<>,Operator::Not)),
+    "-" <Unary> => ctx.push(Node::Unary(<>,Operator::Minus)),
+    <Call>, //todo check if fall back works
+};
+
+Call: ast::NodeID={
+//    <p:Primary> "(" Comma<Expr> ")" => p,
+//    <c: Call> "." <i:Identifier> => c, //FIXME: why does it makes grammar ambigious
+    <Primary> => <>
+};
+
+
+pub Primary: ast::NodeID = {
+    "true" => ctx.push(Node::Bool(true)),
+    "false" => ctx.push(Node::Bool(false)),
+    "nil" => ctx.push(Node::Nil),
+    "this" => ctx.push(Node::This),
+    <Number> => ctx.push(Node::Number(<>)),
+    <Identifier> => ctx.push(Node::Identifier(<>)),
+    <String> => ctx.push(Node::String(<>)),
+    "(" <Expr> ")" => ctx.push(Node::Grouping(<>)),
+    "super." <Identifier> => ctx.push(Node::Super(<>)),
+};
+
+Number: f64 =
+    <s:r"[0-9]+\.?[0-9]*"> => f64::from_str(s).unwrap();
+String: String =
+   <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
+Identifier: String =
+    <s:r"[_a-zA-Z][_0-9a-zA-Z]*"> => s.to_string();
