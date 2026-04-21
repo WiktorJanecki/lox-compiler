@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings" # fail on warnings
-  LLVM_SYS_NO_POLLY: "1"
 
 jobs:
   ci:
@@ -21,6 +20,7 @@ jobs:
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh 22
+            sudo apt-get install -y libpolly-22-dev
 
       - uses: actions/checkout@v4
 
