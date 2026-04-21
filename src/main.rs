@@ -4,7 +4,6 @@ use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
-use std::io::ErrorKind;
 use std::process::Command;
 
 mod ast;
@@ -15,7 +14,9 @@ mod parser;
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
     let file_content = std::fs::read_to_string(&args.filename)?;
-    let ast = parser::parse(&file_content)?;
+    let _ast = parser::parse(&file_content)?;
+
+    //TODO here do the magic
 
     let llvm = r#"
         define i32 @main() {
@@ -63,7 +64,7 @@ fn main() -> anyhow::Result<()> {
 
         target_machine.write_to_file(&module, inkwell::targets::FileType::Object, &obj_path)?;
 
-        Command::new("clafng")
+        Command::new("clang")
             .args([obj_path.to_str().unwrap(), "-o", &args.output_filename()])
             .status()?;
 
