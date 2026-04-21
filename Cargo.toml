@@ -4,3 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
+lalrpop-util ="0.23.1"
+
+# for compiling generated llvm to obj or executable
+inkwell = { version = "0.9.0", features = ["llvm22-1"] } ## TODO: check witch llvm do we want
+
+[build-dependencies]
+# must be the same version as lalrpop runtime
+# default features are [lexer, Unicode] and we need all of them
+lalrpop = "0.23.1"
