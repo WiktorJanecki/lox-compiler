@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "22.1"
+
       - uses: actions/checkout@v4
 
       - name: Install Rust
