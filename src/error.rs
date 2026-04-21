@@ -15,7 +15,7 @@ impl Debug for ParserError {
 
 impl Display for ParserError {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f) 
+        std::fmt::Debug::fmt(&self, f)
     }
 }
 

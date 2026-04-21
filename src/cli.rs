@@ -1,16 +1,16 @@
 use clap::{Parser, ValueEnum};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum EmittingType{
+pub enum EmittingType {
     /// Emits LLVM-IR
     LlvmIr,
     /// Emits object file
     Obj,
     /// Emits executable
-    Exe
+    Exe,
 }
 #[derive(Parser)]
-pub struct Cli{
+pub struct Cli {
     /// Path to lox script
     pub filename: String,
     /// Write output to filename
@@ -30,18 +30,15 @@ impl Cli {
         }
 
         let path = std::path::Path::new(&self.filename);
-        let stem = path.file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
 
         match &self.emit {
             EmittingType::LlvmIr => format!("{stem}.ll"),
             EmittingType::Obj => format!("{stem}.o"),
-            EmittingType::Exe =>{
+            EmittingType::Exe => {
                 if cfg!(windows) {
                     format!("{stem}.exe")
-                }
-                else {
+                } else {
                     format!("{stem}")
                 }
             }

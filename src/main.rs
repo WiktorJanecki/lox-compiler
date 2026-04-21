@@ -32,7 +32,8 @@ fn main() -> anyhow::Result<()> {
     // rest is just helper for us to test compiler
     let llvm_cstring = std::ffi::CString::new(llvm)?;
     let context = Context::create();
-    let buffer = MemoryBuffer::create_from_memory_range_copy(llvm_cstring.as_bytes_with_nul(), "input.ll");
+    let buffer =
+        MemoryBuffer::create_from_memory_range_copy(llvm_cstring.as_bytes_with_nul(), "input.ll");
     let module = context.create_module_from_ir(buffer)?;
     Target::initialize_all(&InitializationConfig::default());
 
