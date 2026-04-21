@@ -6,8 +6,12 @@ Lox is functional and objective script language designed by Robert Nystrom in hi
 ## Usage Instructions
 Make sure you have [Rust](https://rust-lang.org/) toolchain installed and added to your PATH
 
+Next install [LLVM-22.1](https://github.com/llvm/llvm-project/releases/tag/llvmorg-22.1.3) toolchain, add it to PATH and create environmental variable LLVM_SYS_221_PREFIX=toolchain_path.
 
-You can then run compiler directly using cargo or build it and install in your system path
+Quick tip: for [some reason](https://github.com/llvm/llvm-project/issues/35139) official llvm prebuild binaries on windows don't come with llvm-config. You need to build them by yourself. I spent too much time on this issue...
+
+[file.lox](file.lox)
+Finally, you can run compiler directly using cargo or build it and install in your system path
 ```bash
 cargo run . ./examples/hello_world.lox
 ```
@@ -28,6 +32,7 @@ This behaviour can be changed by following arguments:
 - `--emit=exe` change type of output file to executable (default)
 - `--emit=llvm-ir` change type of output file to [LLVM IR](https://llvm.org/docs/LangRef.html)
 - `--emit=obj` change type of output file to object files
+- `--help` display all arguments and default values
 
 Example:
 ```bash
