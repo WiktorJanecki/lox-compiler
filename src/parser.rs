@@ -1,6 +1,6 @@
 use crate::ast::Ast;
 use crate::error::ParserError;
-use lalrpop_util::{ParseError, lalrpop_mod};
+use lalrpop_util::lalrpop_mod;
 
 lalrpop_mod!(pub grammar);
 

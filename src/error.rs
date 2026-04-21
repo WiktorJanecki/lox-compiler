@@ -1,6 +1,4 @@
 use std::fmt::{Debug, Display, Formatter};
-use lalrpop_util::ParseError;
-use lalrpop_util::lexer::Token;
 
 pub struct ParserError {
     pub errors: Vec<String>,
