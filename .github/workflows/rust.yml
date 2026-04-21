@@ -19,7 +19,7 @@ jobs:
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "22.1"
+          version: "22.1.0"
 
       - uses: actions/checkout@v4
 
