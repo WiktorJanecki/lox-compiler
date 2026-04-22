@@ -53,8 +53,11 @@ pub enum Node {
     Stmt(NodeID),
 
     // statements
-    ExprStmt(NodeID),  // expr
-    PrintStmt(NodeID), // expr
+    ExprStmt(NodeID),          // expr
+    PrintStmt(NodeID),         // expr
+    ReturnStmt(NodeID),        // expr
+    WhileStmt(NodeID, NodeID), // expr, stmt
+    Block(Vec<NodeID>),        // decls
 
     // expressions
     Assignment(Id, NodeID), // stores other assignment // TODO: store calling

@@ -12,6 +12,8 @@ pub Program: () = {
     }
 };
 
+// DECLARATIONS
+
 Declaration: ast::NodeID = {
     <Stmt> => ctx.push(Node::Stmt(<>)),
     "var" <i:Identifier>  <opt:VarDeclValue?>  ";" => {
@@ -27,11 +29,15 @@ VarDeclValue: ast::NodeID = {
     "=" <Expr>
 }
 
+// STATEMENTS
+
 Stmt: ast::NodeID = {
     "print" <Expr> ";" => ctx.push(Node::PrintStmt(<>)),
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
     // ifStmt
 };
+
+// EXPRESSIONS
 
 Expr: ast::NodeID = {
     <Assignment> => <>,
