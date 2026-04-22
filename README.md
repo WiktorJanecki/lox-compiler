@@ -10,7 +10,6 @@ Next install [LLVM-22.1](https://github.com/llvm/llvm-project/releases/tag/llvmo
 
 Quick tip: for [some reason](https://github.com/llvm/llvm-project/issues/35139) official llvm prebuild binaries on windows don't come with llvm-config. You need to build them by yourself. I spent too much time on this issue...
 
-[file.lox](examples/file.lox)
 Finally, you can run compiler directly using cargo or build it and install in your system path
 ```bash
 cargo run ./examples/hello_world.lox
