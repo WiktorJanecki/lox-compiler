@@ -16,14 +16,18 @@ pub Program: () = {
 
 Declaration: ast::NodeID = {
     <Stmt> => ctx.push(Node::Stmt(<>)),
+    <VarDecl>,
+    // <funcDecl>
+};
+
+VarDecl: ast::NodeID = {
     "var" <i:Identifier>  <opt:VarDeclValue?>  ";" => {
         let rhs = if let Some(s) = opt{
            s
         } else {ctx.push(Node::Nil)};
         ctx.push(Node::VarDecl(i, rhs))
     }
-    // <funcDecl>
-};
+}
 
 VarDeclValue: ast::NodeID = {
     "=" <Expr>
@@ -32,10 +36,41 @@ VarDeclValue: ast::NodeID = {
 // STATEMENTS
 
 Stmt: ast::NodeID = {
+    #[precedence(level="0")]
     "print" <Expr> ";" => ctx.push(Node::PrintStmt(<>)),
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
-    // ifStmt
+    "for" "(" <VarDecl> <Expr?> ";" <Expr?> ")" <Stmt> => {
+       // TODO add desugared while loop
+       0
+    },
+    "for" "(" <Expr> ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
+       // TODO add desugared while loop
+       0
+    },
+    "for" "("  ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
+       // TODO add desugared while loop
+       0
+    },
+//    "if" "(" <Expr> ")" <Stmt> <Else?> => {
+//            ctx.push(Node::IfStmt(<>, <>, <>))
+//    },
+    "{" <Declaration*> "}" => {
+        ctx.push(Node::Block(<>))
+    },
+     "if" "(" <e:Expr> ")" <s:Stmt> => {
+         ctx.push(Node::IfStmt(e, s, None))
+     },
+
+     #[precedence(level="1")] #[assoc(side="right")]
+     "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
+         ctx.push(Node::IfStmt(e, s1, Some(s2)))
+     },
 };
+
+Else: ast::NodeID = { //statement
+    "else" <Stmt>
+}
+// TODO: forstmt
 
 // EXPRESSIONS
 
