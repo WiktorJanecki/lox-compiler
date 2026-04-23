@@ -1,0 +1,257 @@
+class Node {}
+
+class Array {
+  init(size) {
+    if (size <= 0) {
+      this.size = 0;
+      this.first = nil;
+      return;
+    }
+    this.size = size;
+    this.first = Node();
+    this.first.val = nil;
+    this.first.next = nil;
+    size = size - 1;
+    var cur = this.first;
+    while (size > 0) {
+      var new = Node();
+      new.val = nil;
+      new.next = nil;
+      cur.next = new;
+      size = size - 1;
+      cur = new;
+    }
+  }
+  get(pos) {
+    if (pos < 0 or pos >= this.size) {
+      return nil;
+    }
+    var cur = this.first;
+    while (pos > 0) {
+      cur = cur.next;
+      pos = pos - 1;
+    }
+    return cur.val;
+  }
+  set(pos, val) {
+    if (pos < 0 or pos >= this.size) {
+      return nil;
+    }
+    var cur = this.first;
+    while (pos > 0) {
+      cur = cur.next;
+      pos = pos - 1;
+    }
+    cur.val = val;
+  }
+  foreach(func) {
+    var cur = this.first;
+    func(cur);
+    var pos = this.size - 1;
+    while (pos > 0) {
+      cur = cur.next;
+      func(cur);
+      pos = pos - 1;
+    }
+  }
+
+  memset(v) {
+    var cur = this.first;
+    cur.val = v;
+    var pos = this.size - 1;
+    while (pos > 0) {
+      cur = cur.next;
+      cur.val = v;
+      pos = pos - 1;
+    }
+  }
+}
+
+
+fun sin(x) {
+  if (x > 3.14) {
+    return -sin(x - 3.14);
+  }
+  if (x < 0){
+    return -sin(x);
+  }
+  var n = x;
+  var fact = 1;
+  var iter = 1;
+  var res = 0;
+  var sign = 1;
+  while (iter < 10) {
+    res = res + sign * n / fact;
+    fact = fact * (iter + 1) * (iter + 2);
+    n = n * x * x;
+    sign = sign * -1;
+    iter = iter + 2;
+  }
+  return res;
+}
+
+fun cos(x) {
+  if (x > 3.14) {
+    return -cos(x - 3.14);
+  }
+  if(x < 0) {
+    return cos(x);
+  }
+  var n = 1;
+  var fact = 1;
+  var iter = 0;
+  var res = 0;
+  var sign = 1;
+  while (iter < 10) {
+    res = res + sign * n / fact;
+    fact = fact * (iter + 1) * (iter + 2);
+    n = n * x * x;
+    sign = sign * -1;
+    iter = iter + 2;
+  }
+  return res;
+}
+
+fun tan(x) {
+  return sin(x) / cos(x);
+}
+
+var charmap = Array(12);
+// ".,-~:;=!*#$@"
+charmap.set(0, ".");
+charmap.set(1, ",");
+charmap.set(2, "-");
+charmap.set(3, "~");
+charmap.set(4, ":");
+charmap.set(5, ";");
+charmap.set(6, "=");
+charmap.set(7, "!");
+charmap.set(8, "*");
+charmap.set(9, "#");
+charmap.set(10, "$");
+charmap.set(11, "@");
+
+var theta_spacing = 0.07;
+var phi_spacing = 0.02;
+var screen_width = 100;
+var screen_height = 40;
+
+var R1 = 1;
+var R2 = 2;
+
+var pi = 3.1415;
+var K1 = 250;
+var K2 = 40;
+
+var output = Array(screen_height);
+for (var i = 0; i < screen_height; i = i + 1) {
+  var row = Array(screen_width);
+  row.memset(" ");
+  output.set(i, row);
+}
+var zbuffer = Array(screen_height);
+for (var i = 0; i < screen_height; i = i + 1) {
+  var zrow = Array(screen_width);
+  zrow.memset(0);
+  zbuffer.set(i, zrow);
+}
+
+fun empty_row(row) {
+  row.val.memset(" ");
+}
+
+fun empty_zrow(zrow) {
+  zrow.val.memset(0);
+}
+
+fun print_row(row) {
+  var str = "";
+  var node = row.val.first;
+  while (node != nil) {
+    str = str + node.val;
+    node = node.next;
+  }
+  print str;
+}
+
+fun render_frame(A, B) {
+  // precompute sines and cosines of A and B
+  var cosA = cos(A);
+  var sinA = sin(A);
+  var cosB = cos(B);
+  var sinB = sin(B);
+
+  output.foreach(empty_row);
+  zbuffer.foreach(empty_zrow);
+
+  // theta goes around the cross-sectional circle of a torus
+  for (var theta = 0; theta < 2 * pi; theta = theta + theta_spacing) {
+    // precompute sines and cosines of theta
+    var costheta = cos(theta);
+    var sintheta = sin(theta);
+
+    // phi goes around the center of revolution of a torus
+    for (var phi = 0; phi < 2 * pi; phi = phi + phi_spacing) {
+      // precompute sines and cosines of phi
+      var cosphi = cos(phi);
+      var sinphi = sin(phi);
+
+      // the x,y coordinate of the circle, before revolving (factored
+      // out of the above equations)
+      var circlex = R2 + R1 * costheta;
+      var circley = R1 * sintheta;
+
+      // final 3D (x,y,z) coordinate after rotations, directly from
+      // our math above
+      var x = circlex * (cosB * cosphi + sinA * sinB * sinphi) - circley * cosA * sinB;
+      var y = circlex * (sinB * cosphi - sinA * cosB * sinphi) + circley * cosA * cosB;
+      var z = K2 + cosA * circlex * sinphi + circley * sinA;
+      var ooz = 1 / z; // "one over z"
+
+      // x and y projection.  note that y is negated here, because y
+      // goes up in 3D space but down on 2D displays.
+      var xp = (screen_width / 2 + K1 * ooz * x);
+      var yp = (screen_height / 2 - K1 * ooz * y);
+
+      // calculate luminance.  ugly, but correct.
+      var L = cosphi * costheta * sinB - cosA * costheta * sinphi - sinA * sintheta + cosB * (cosA * sintheta - costheta * sinA * sinphi);
+      // L ranges from -sqrt(2) to +sqrt(2).  If it's < 0, the surface
+      // is pointing away from us, so we won't bother trying to plot it.
+      if (L > 0) {
+        // test against the z-buffer.  larger 1/z means the pixel is
+        // closer to the viewer than what's already plotted.
+        if (xp > screen_width - 1) {
+          xp = screen_width - 1;
+        }
+        if (xp < 0) {
+          xp = 0;
+        }
+        if (yp > screen_height - 1) {
+          yp = screen_height - 1;
+        }
+        if (yp < 0) {
+          yp = 0;
+        }
+
+        if (ooz > zbuffer.get(yp).get(xp)) {
+          zbuffer.get(yp).set(xp, ooz);
+          var luminance_index = L * 8;
+          if (luminance_index > 11) {
+            luminance_index = 11;
+          }
+          output.get(yp).set(xp, charmap.get(luminance_index));
+        }
+      }
+    }
+  }
+  output.foreach(print_row);
+}
+
+
+var A = 0;
+var B = 0;
+while (true) {
+  render_frame(A, B);
+  A = A + 0.04;
+  B = B + 0.02;
+}
