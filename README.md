@@ -44,7 +44,7 @@ Project made for university course by:
 - Dmytro Harasiuk: harasiuk@student.agh.edu.pl
 
 ## Syntax Grammar
-LR(1) grammar
+Parser generator file: [grammar.lalrpop](src/grammar.lalrpop)
 ```lox
 program        → declaration* EOF ;
 

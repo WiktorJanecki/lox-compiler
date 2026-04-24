@@ -17,7 +17,8 @@ pub Program: () = {
 Declaration: ast::NodeID = {
     <Stmt> => ctx.push(Node::Stmt(<>)),
     <VarDecl>,
-    // <funcDecl>
+    "fun" <Function>,
+    <ClassDecl>,
 };
 
 VarDecl: ast::NodeID = {
@@ -32,6 +33,27 @@ VarDecl: ast::NodeID = {
 VarDeclValue: ast::NodeID = {
     "=" <Expr>
 }
+
+Comma<T>: Vec<T> = {
+      <v:(<T> ",")*> <last:T?> => {
+          let mut result = v;
+          if let Some(last_elem) = last {
+              result.push(last_elem);
+          }
+          result
+      }
+};
+
+Parameters: Vec<ast::Id> = Comma<Identifier>;
+//Arguments: Vec<ast::NodeID> = Comma<Expr>;
+
+Function: ast::NodeID = {
+    <Identifier> "(" <Parameters> ")" <Block> => ctx.push(Node::FunDecl(<>,<>,<>))
+};
+
+ClassDecl: ast::NodeID = "class" <Identifier> <BaseClass?> "{" <Function*> "}" => ctx.push(Node::ClassDecl(<>,<>,<>));
+
+BaseClass: ast::Id = "<" <Identifier>;
 
 // STATEMENTS
 
@@ -61,31 +83,29 @@ Stmt: ast::NodeID = {
     "while" "(" <Expr> ")" <Stmt> => {
         ctx.push(Node::WhileStmt(<>,<>))
     },
-    "{" <Declaration*> "}" => {
-        ctx.push(Node::Block(<>))
-    },
+    <Block>,
     "if" "(" <e:Expr> ")" <s:Stmt> => {
         ctx.push(Node::IfStmt(e, s, None))
     },
 
     #[precedence(level="1")] #[assoc(side="right")]
     "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
-     ctx.push(Node::IfStmt(e, s1, Some(s2)))
+         ctx.push(Node::IfStmt(e, s1, Some(s2)))
     },
 };
+
+Block: ast::NodeID = "{" <Declaration*> "}" => ctx.push(Node::Block(<>));
 
 // EXPRESSIONS
 
 Expr: ast::NodeID = <Assignment>;
 
 Assignment: ast::NodeID ={
-    <p:PrefixAssignment?> <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)), // TODO: store calle
-    <LogicOr> => <>,
+     <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)), // TODO: store calle
+     <c:Call> "." <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)), // TODO: store calle
+    <LogicOr>,
 };
 
-PrefixAssignment: ast::NodeID ={
-    <Call> "." => 0 // todo
-};
 
 LogicOr: ast::NodeID = {
     <LogicOr> "or" <LogicAnd> => ctx.push(Node::LogicOr(<>, <>)),
@@ -130,10 +150,12 @@ Unary: ast::NodeID={
 };
 
 Call: ast::NodeID={
-//    <p:Primary> "(" Comma<Expr> ")" => p,
-//    <c: Call> "." <i:Identifier> => c, //FIXME: why does it makes grammar ambigious
+    <Call> "(" Comma<Expr> ")" => {0},
+    <Call> "." <Identifier> => {0}, // TODO: make action for these two, maybe store ID instead of node id
     <Primary>
 };
+
+CallPostfix: ast::NodeID = "." <Identifier> => ctx.push(Node::Identifier(<>));
 
 
 pub Primary: ast::NodeID = {

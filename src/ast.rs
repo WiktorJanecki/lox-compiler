@@ -50,6 +50,8 @@ pub type NodeID = usize;
 pub enum Node {
     // declarations
     VarDecl(Id, NodeID), // expr
+    ClassDecl(Id, Option<Id>, Vec<NodeID>), // name, base, functions
+    FunDecl(Id, Vec<Id>, NodeID), // name, params, block
     Stmt(NodeID),
 
     // statements
