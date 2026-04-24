@@ -44,11 +44,8 @@ Comma<T>: Vec<T> = {
       }
 };
 
-Parameters: Vec<ast::Id> = Comma<Identifier>;
-//Arguments: Vec<ast::NodeID> = Comma<Expr>;
-
 Function: ast::NodeID = {
-    <Identifier> "(" <Parameters> ")" <Block> => ctx.push(Node::FunDecl(<>,<>,<>))
+    <Identifier> "("  <Comma<Identifier>> ")" <Block> => ctx.push(Node::FunDecl(<>,<>,<>))
 };
 
 ClassDecl: ast::NodeID = "class" <Identifier> <BaseClass?> "{" <Function*> "}" => ctx.push(Node::ClassDecl(<>,<>,<>));
@@ -101,11 +98,10 @@ Block: ast::NodeID = "{" <Declaration*> "}" => ctx.push(Node::Block(<>));
 Expr: ast::NodeID = <Assignment>;
 
 Assignment: ast::NodeID ={
-     <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)), // TODO: store calle
-     <c:Call> "." <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)), // TODO: store calle
+    <Identifier> "=" <Assignment> => ctx.push(Node::Assignment(None, <>, <>)),
+    <Call> "." <Identifier> "=" <Assignment> => ctx.push(Node::Assignment(Some(<>), <>, <>)),
     <LogicOr>,
 };
-
 
 LogicOr: ast::NodeID = {
     <LogicOr> "or" <LogicAnd> => ctx.push(Node::LogicOr(<>, <>)),
@@ -150,15 +146,12 @@ Unary: ast::NodeID={
 };
 
 Call: ast::NodeID={
-    <Call> "(" Comma<Expr> ")" => {0},
-    <Call> "." <Identifier> => {0}, // TODO: make action for these two, maybe store ID instead of node id
+    <Call> "(" Comma<Expr> ")" => 0,
+    <Call> "." <Identifier> => 0, // TODO: make action for these two, maybe store ID instead of node id
     <Primary>
 };
 
-CallPostfix: ast::NodeID = "." <Identifier> => ctx.push(Node::Identifier(<>));
-
-
-pub Primary: ast::NodeID = {
+Primary: ast::NodeID = {
     "true" => ctx.push(Node::Bool(true)),
     "false" => ctx.push(Node::Bool(false)),
     "nil" => ctx.push(Node::Nil),

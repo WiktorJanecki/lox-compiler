@@ -4,8 +4,8 @@ use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
-use std::process::Command;
 use loxc::*;
+use std::process::Command;
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();

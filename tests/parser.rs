@@ -114,7 +114,7 @@ fn parse_block_statement() {
 }
 
 #[test]
-fn parse_class_declaration(){
+fn parse_class_declaration() {
     parse_ok("class name {}");
     parse_ok("class name < base {}");
     parse_ok("class name{ nazwa(){} }");
@@ -122,7 +122,7 @@ fn parse_class_declaration(){
 }
 
 #[test]
-fn parse_function_declaration(){
+fn parse_function_declaration() {
     parse_ok("fun nazwa() {}");
     parse_ok("fun nazwa(arg) {}");
     parse_ok("fun nazwa(arg, arg, arg, argg) {}");
@@ -131,7 +131,7 @@ fn parse_function_declaration(){
 }
 
 #[test]
-fn parse_call(){
+fn parse_call() {
     parse_ok("wywolanie();");
     parse_ok("wywolanie(arg);");
     parse_ok("wywolanie(arg, args);");

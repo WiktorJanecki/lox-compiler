@@ -10,6 +10,7 @@ pub struct Ast {
     nodes: Vec<Node>,
     pub program: Vec<NodeID>, // Vec<decl>
 }
+#[allow(clippy::new_without_default)] // we do not need that
 impl Ast {
     pub fn new() -> Self {
         Self {
@@ -49,9 +50,9 @@ pub type NodeID = usize;
 #[allow(unused)]
 pub enum Node {
     // declarations
-    VarDecl(Id, NodeID), // expr
+    VarDecl(Id, NodeID),                    // expr
     ClassDecl(Id, Option<Id>, Vec<NodeID>), // name, base, functions
-    FunDecl(Id, Vec<Id>, NodeID), // name, params, block
+    FunDecl(Id, Vec<Id>, NodeID),           // name, params, block
     Stmt(NodeID),
 
     // statements
@@ -63,7 +64,7 @@ pub enum Node {
     Block(Vec<NodeID>),                     // decls
 
     // expressions
-    Assignment(Id, NodeID), // stores other assignment // TODO: store calling
+    Assignment(Option<NodeID>, Id, NodeID), // Call node, lhs id, rhs expression
     LogicOr(NodeID, NodeID),
     LogicAnd(NodeID, NodeID),
     Equality(NodeID, Operator, NodeID),
@@ -71,7 +72,7 @@ pub enum Node {
     Term(NodeID, Operator, NodeID),
     Factor(NodeID, Operator, NodeID),
     Unary(NodeID, Operator),
-    Call, // TODO:
+    Call, // TODO: store calle
     Identifier(Id),
     Super(Id),
     Grouping(NodeID), //expr
