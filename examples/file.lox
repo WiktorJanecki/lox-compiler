@@ -1,1 +1,62 @@
-5+5;
+// ------------------------------------------
+//                   BASICS
+// ------------------------------------------
+
+var a = 1;
+{
+    var a = 2;
+    {
+        var a = 3;
+    }
+    print a;
+}
+
+var concatenation = "first" + "second";
+var nullByDefault;
+
+if (2 + 2 <= 4) {} else { print "unreachable"; }
+
+while (false) {}
+
+fun max(a,b){
+    if ( a > b){
+        return a;
+    }
+    return b;
+}
+
+for (var i = 1; i < 5; i = i + 1) {
+  print i * i;
+}
+
+// ------------------------------------------
+//                    OOP
+// ------------------------------------------
+
+class IAnimal{}
+
+class Duck < IAnimal{
+  init(name) {
+    this.name = name;
+  }
+
+  quack() {
+    print this.name + " quacks";
+  }
+}
+
+var duck = Duck("Waddles");
+duck.quack();
+
+// ------------------------------------------
+//                CLOUSURES
+// ------------------------------------------
+fun make_adder(n) {
+  fun adder(i) {
+    return n + i;
+  }
+  return adder;
+}
+var add5 = make_adder(5);
+print add5(1);
+print add5(100);
