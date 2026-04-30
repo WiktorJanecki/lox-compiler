@@ -5,12 +5,15 @@ use loxc::codegen::codegen;
 use loxc::parser::parse;
 
 #[test]
-fn empty(){
+fn empty() -> anyhow::Result<()>{
+    // empty script should compile and have entrypoint
+
     let ast = Ast::new();
     let mut context = Context::create();
-    let module = codegen(ast, &mut context);
-
-    assert!(module.is_ok());
+    let module = codegen(ast, &mut context)?;
+    let main = module.get_function("main");
+    assert!(main.is_some());
+    Ok(())
 }
 
 #[test]
