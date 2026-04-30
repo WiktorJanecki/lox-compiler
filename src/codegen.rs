@@ -5,9 +5,7 @@ use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
-use inkwell::types::AnyTypeEnum::ArrayType;
 use inkwell::types::BasicMetadataTypeEnum::PointerType;
-use inkwell::values::AnyValueEnum::IntValue;
 use inkwell::values::BasicMetadataValueEnum::PointerValue;
 use inkwell::values::GlobalValue;
 
@@ -101,15 +99,6 @@ pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module<'_
         let decl = ast.nodes.get(decl_id).unwrap();
         gen_declaration(decl, &module, &ast, &builder);
     }
-
-    // Hello world TODO: Remove
-    // let global_str = builder.build_global_string_ptr("hello\n", "name")?;
-    // let printf = module.get_function("printf").unwrap();
-    // builder.build_call(
-    //     printf,
-    //     &[PointerValue(global_str.as_pointer_value())],
-    //     "printf",
-    // )?;
 
     gen_return_zero(&module, &builder)?;
 
