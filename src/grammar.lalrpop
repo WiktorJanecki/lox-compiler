@@ -17,7 +17,8 @@ pub Program: () = {
 Declaration: ast::NodeID = {
     <Stmt> => ctx.push(Node::Stmt(<>)),
     <VarDecl>,
-    // <funcDecl>
+    "fun" <Function>,
+    <ClassDecl>,
 };
 
 VarDecl: ast::NodeID = {
@@ -33,11 +34,36 @@ VarDeclValue: ast::NodeID = {
     "=" <Expr>
 }
 
+Comma<T>: Vec<T> = {
+      <v:(<T> ",")*> <last:T?> => {
+          let mut result = v;
+          if let Some(last_elem) = last {
+              result.push(last_elem);
+          }
+          result
+      }
+};
+
+Function: ast::NodeID = {
+    <Identifier> "("  <Comma<Identifier>> ")" <Block> => ctx.push(Node::FunDecl(<>,<>,<>))
+};
+
+ClassDecl: ast::NodeID = "class" <Identifier> <BaseClass?> "{" <Function*> "}" => ctx.push(Node::ClassDecl(<>,<>,<>));
+
+BaseClass: ast::Id = "<" <Identifier>;
+
 // STATEMENTS
 
 Stmt: ast::NodeID = {
     #[precedence(level="0")]
     "print" <Expr> ";" => ctx.push(Node::PrintStmt(<>)),
+    "return" <Expr?> ";" => {
+        if let Some(id) = <>{
+            return ctx.push(Node::ReturnStmt(id))
+        }
+        let nil = ctx.push(Node::Nil);
+        ctx.push(Node::ReturnStmt(nil))
+    },
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
     "for" "(" <VarDecl> <Expr?> ";" <Expr?> ")" <Stmt> => {
        // TODO add desugared while loop
@@ -51,125 +77,81 @@ Stmt: ast::NodeID = {
        // TODO add desugared while loop
        0
     },
-//    "if" "(" <Expr> ")" <Stmt> <Else?> => {
-//            ctx.push(Node::IfStmt(<>, <>, <>))
-//    },
-    "{" <Declaration*> "}" => {
-        ctx.push(Node::Block(<>))
+    "while" "(" <Expr> ")" <Stmt> => {
+        ctx.push(Node::WhileStmt(<>,<>))
     },
-     "if" "(" <e:Expr> ")" <s:Stmt> => {
-         ctx.push(Node::IfStmt(e, s, None))
-     },
+    <Block>,
+    "if" "(" <e:Expr> ")" <s:Stmt> => {
+        ctx.push(Node::IfStmt(e, s, None))
+    },
 
-     #[precedence(level="1")] #[assoc(side="right")]
-     "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
+    #[precedence(level="1")] #[assoc(side="right")]
+    "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
          ctx.push(Node::IfStmt(e, s1, Some(s2)))
-     },
+    },
 };
 
-Else: ast::NodeID = { //statement
-    "else" <Stmt>
-}
-// TODO: forstmt
+Block: ast::NodeID = "{" <Declaration*> "}" => ctx.push(Node::Block(<>));
 
 // EXPRESSIONS
 
-Expr: ast::NodeID = {
-    <Assignment> => <>,
-};
+Expr: ast::NodeID = <Assignment>;
 
 Assignment: ast::NodeID ={
-    <p:PrefixAssignment?> <i:Identifier> "=" <a:Assignment> => ctx.push(Node::Assignment(i, a)),
-    <LogicOr> => <>,
-};
-
-
-PrefixAssignment: ast::NodeID ={
-    <Call> "." => 0 // todo
+    <Identifier> "=" <Assignment> => ctx.push(Node::Assignment(None, <>, <>)),
+    <Call> "." <Identifier> "=" <Assignment> => ctx.push(Node::Assignment(Some(<>), <>, <>)),
+    <LogicOr>,
 };
 
 LogicOr: ast::NodeID = {
-    <LogicAnd> => <>,
-    <f:LogicAnd> <rest:("or" <LogicAnd>)+> => {
-        let mut root = f;
-        for p in rest{
-           root = ctx.push(Node::LogicOr(root, p))
-        }
-       root // TODO: rewrite to left recursion
-    },
+    <LogicOr> "or" <LogicAnd> => ctx.push(Node::LogicOr(<>, <>)),
+    <LogicAnd>,
 };
 
 LogicAnd: ast::NodeID = {
-    <Equality> => <>,
-    <f:Equality> <rest:("and" <Equality>)+> => {
-        let mut root = f;
-        for p in rest{
-           root = ctx.push(Node::LogicAnd(root, p))
-        }
-       root // TODO: rewrite to left recursion
-    },
+    <LogicAnd> "and" <Equality> => ctx.push(Node::LogicAnd(<>, <>)),
+    <Equality>,
 };
 
 Equality: ast::NodeID={
-    <Equality> "==" <Comparison> => {
-        ctx.push(Node::Equality(<>, Operator::Eq, <>))
-    },
-    <Equality> "!=" <Comparison> => {
-        ctx.push(Node::Equality(<>, Operator::Neq, <>))
-    },
-    <Comparison> => <>,
+    <Equality> "==" <Comparison> => ctx.push(Node::Equality(<>, Operator::Eq, <>)),
+    <Equality> "!=" <Comparison> => ctx.push(Node::Equality(<>, Operator::Neq, <>)),
+    <Comparison>,
 }
 
 Comparison: ast::NodeID={
-    <Comparison> ">=" <Term> => {
-        ctx.push(Node::Comparison(<>, Operator::Geq, <>))
-    },
-    <Comparison> "<=" <Term> => {
-        ctx.push(Node::Comparison(<>, Operator::Leq, <>))
-    },
-    <Comparison> "<" <Term> => {
-        ctx.push(Node::Comparison(<>, Operator::Less, <>))
-    },
-    <Comparison> ">" <Term> => {
-        ctx.push(Node::Comparison(<>, Operator::Greater, <>))
-    },
-    <Term> => <>,
+    <Comparison> ">=" <Term> => ctx.push(Node::Comparison(<>, Operator::Geq, <>)),
+    <Comparison> "<=" <Term> => ctx.push(Node::Comparison(<>, Operator::Leq, <>)),
+    <Comparison> "<" <Term> => ctx.push(Node::Comparison(<>, Operator::Less, <>)),
+    <Comparison> ">" <Term> => ctx.push(Node::Comparison(<>, Operator::Greater, <>)),
+    <Term>,
 }
 
 Term: ast::NodeID={
-    <Term> "+" <Factor> => {
-        ctx.push(Node::Term(<>, Operator::Plus, <>))
-    },
-    <Term> "-" <Factor> => {
-        ctx.push(Node::Term(<>, Operator::Minus, <>))
-    },
-    <Factor> => <>,
+    <Term> "+" <Factor> => ctx.push(Node::Term(<>, Operator::Plus, <>)),
+    <Term> "-" <Factor> => ctx.push(Node::Term(<>, Operator::Minus, <>)),
+    <Factor>,
 }
 
 Factor: ast::NodeID={
-    <Factor> "*" <Unary> => {
-        ctx.push(Node::Factor(<>, Operator::Mul, <>))
-    },
-    <Factor> "/" <Unary> => {
-        ctx.push(Node::Factor(<>, Operator::Div, <>))
-    },
-    <Unary> => <>,
+    <Factor> "*" <Unary> => ctx.push(Node::Factor(<>, Operator::Mul, <>)),
+    <Factor> "/" <Unary> => ctx.push(Node::Factor(<>, Operator::Div, <>)),
+    <Unary>,
 }
 
 Unary: ast::NodeID={
     "!" <Unary> => ctx.push(Node::Unary(<>,Operator::Not)),
     "-" <Unary> => ctx.push(Node::Unary(<>,Operator::Minus)),
-    <Call>, //todo check if fall back works
+    <Call>,
 };
 
 Call: ast::NodeID={
-//    <p:Primary> "(" Comma<Expr> ")" => p,
-//    <c: Call> "." <i:Identifier> => c, //FIXME: why does it makes grammar ambigious
-    <Primary> => <>
+    <Call> "(" Comma<Expr> ")" => 0,
+    <Call> "." <Identifier> => 0, // TODO: make action for these two, maybe store ID instead of node id
+    <Primary>
 };
 
-
-pub Primary: ast::NodeID = {
+Primary: ast::NodeID = {
     "true" => ctx.push(Node::Bool(true)),
     "false" => ctx.push(Node::Bool(false)),
     "nil" => ctx.push(Node::Nil),
