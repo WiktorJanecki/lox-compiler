@@ -2,12 +2,13 @@ use crate::ast;
 use crate::ast::{Ast, Node};
 use anyhow::anyhow;
 use inkwell::AddressSpace;
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
-use inkwell::types::BasicMetadataTypeEnum::PointerType;
+use inkwell::types::BasicMetadataTypeEnum::{IntType, PointerType};
 use inkwell::values::BasicMetadataValueEnum::PointerValue;
-use inkwell::values::GlobalValue;
+use inkwell::values::{BasicValueEnum, FunctionValue, GlobalValue};
 
 fn gen_extern_functions(module: &Module) {
     // printf
@@ -15,13 +16,32 @@ fn gen_extern_functions(module: &Module) {
     let str = context.ptr_type(AddressSpace::default());
     let tp = context.i32_type().fn_type(&[PointerType(str)], true);
     module.add_function("printf", tp, Some(Linkage::External));
+    let tp = context.void_type().fn_type(&[context.i32_type().into()], false);
+    module.add_function("exit", tp, Some(Linkage::External));
 }
 
-fn gen_begin_main(module: &Module, builder: &Builder) {
+fn gen_panic_fn<'a>(module: &'a Module, builder: &Builder) -> FunctionValue<'a> {
+    let context = module.get_context();
+    let str = context.ptr_type(AddressSpace::default());
+    let tp = context.void_type().fn_type(&[PointerType(str)], false);
+    let panic_fn = module.add_function("panic", tp, None);
+    let block = context.append_basic_block(panic_fn, "entry");
+    builder.position_at_end(block);
+    let arg = panic_fn.get_first_param().unwrap();
+    let printf = module.get_function("printf").unwrap();
+    builder.build_call(printf, &[arg.into()], "_");
+    let exit = module.get_function("exit").unwrap();
+    builder.build_call(exit, &[context.i32_type().const_int(u64::MAX, false).into()], "_");
+    builder.build_unreachable();
+    panic_fn
+}
+
+fn gen_begin_main<'a>(module: &'a Module, builder: &Builder) -> BasicBlock<'a> {
     let context = module.get_context();
     let main_fn = module.add_function("main", context.i32_type().fn_type(&[], false), None);
     let entry = context.append_basic_block(main_fn, "entry");
     builder.position_at_end(entry);
+    entry
 }
 
 fn gen_return_zero(module: &Module, builder: &Builder) -> anyhow::Result<()> {
@@ -94,7 +114,11 @@ pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module<'_
     let builder = context.create_builder();
 
     gen_extern_functions(&module);
-    gen_begin_main(&module, &builder);
+    let panic_fn = gen_panic_fn(&module, &builder);
+    let entry_block = gen_begin_main(&module, &builder);
+    builder.position_at_end(entry_block);
+    let str = builder.build_global_string_ptr("PANIC\n", "panic_msg");
+    builder.build_call(panic_fn, &[PointerValue(str?.as_pointer_value())], "_");
 
     println!("DECLS: {}", ast.program.len());
     for decl_id in ast.program.clone() {
@@ -102,8 +126,8 @@ pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module<'_
         let decl = ast.nodes.get(decl_id).unwrap();
         gen_declaration(decl, &module, &ast, &builder);
     }
-
     gen_return_zero(&module, &builder)?;
 
+    println!("{}", module.to_string());
     Ok(module)
 }
