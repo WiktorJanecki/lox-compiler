@@ -7,8 +7,9 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::BasicMetadataTypeEnum::{IntType, PointerType};
+use inkwell::types::{BasicMetadataTypeEnum, StructType};
 use inkwell::values::BasicMetadataValueEnum::PointerValue;
-use inkwell::values::{BasicValueEnum, FunctionValue, GlobalValue};
+use inkwell::values::{BasicValueEnum, FunctionValue, GlobalValue, StructValue};
 
 fn gen_extern_functions(module: &Module) {
     // printf
@@ -16,7 +17,9 @@ fn gen_extern_functions(module: &Module) {
     let str = context.ptr_type(AddressSpace::default());
     let tp = context.i32_type().fn_type(&[PointerType(str)], true);
     module.add_function("printf", tp, Some(Linkage::External));
-    let tp = context.void_type().fn_type(&[context.i32_type().into()], false);
+    let tp = context
+        .void_type()
+        .fn_type(&[context.i32_type().into()], false);
     module.add_function("exit", tp, Some(Linkage::External));
 }
 
@@ -31,9 +34,20 @@ fn gen_panic_fn<'a>(module: &'a Module, builder: &Builder) -> FunctionValue<'a> 
     let printf = module.get_function("printf").unwrap();
     builder.build_call(printf, &[arg.into()], "_");
     let exit = module.get_function("exit").unwrap();
-    builder.build_call(exit, &[context.i32_type().const_int(u64::MAX, false).into()], "_");
+    builder.build_call(
+        exit,
+        &[context.i32_type().const_int(u64::MAX, false).into()],
+        "_",
+    );
     builder.build_unreachable();
     panic_fn
+}
+fn gen_lox_object<'a>(module: &'a Module, builder: &Builder) -> StructType<'a> {
+    let context = module.get_context();
+    let ti8 = context.i8_type();
+    let tbiggest = context.i64_type();
+    let lox_obj = context.struct_type(&[ti8.into(), tbiggest.into()], true);
+    lox_obj
 }
 
 fn gen_begin_main<'a>(module: &'a Module, builder: &Builder) -> BasicBlock<'a> {
@@ -84,6 +98,23 @@ fn gen_statement(stmt: &Node, module: &Module, ast: &Ast, builder: &Builder) {
     }
 }
 
+fn gen_number<'a>(
+    number: f64,
+    module: &'a Module,
+    builder: &'a Builder,
+    loxobj: StructType<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let context = module.get_context();
+    let ptr = builder.build_alloca(loxobj, "lox")?;
+    let index_ptr = builder.build_struct_gep(loxobj, ptr, 0, "index")?;
+    let union_ptr = builder.build_struct_gep(loxobj, ptr, 1, "union")?;
+
+    builder.build_store(index_ptr, context.i8_type().const_int(120, false))?;
+    builder.build_store(union_ptr, context.f64_type().const_float(number))?;
+
+    Ok(ptr)
+}
+
 fn gen_expr<'c>(
     expr: &Node,
     module: &'c Module,
@@ -115,10 +146,12 @@ pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module<'_
 
     gen_extern_functions(&module);
     let panic_fn = gen_panic_fn(&module, &builder);
+    let val_struct = gen_lox_object(&module, &builder);
     let entry_block = gen_begin_main(&module, &builder);
     builder.position_at_end(entry_block);
-    let str = builder.build_global_string_ptr("PANIC\n", "panic_msg");
-    builder.build_call(panic_fn, &[PointerValue(str?.as_pointer_value())], "_");
+    // let str = builder.build_global_string_ptr("PANIC\n", "panic_msg");
+    // builder.build_call(panic_fn, &[PointerValue(str?.as_pointer_value())], "_");
+    gen_number(69.0, &module, &builder, val_struct)?;
 
     println!("DECLS: {}", ast.program.len());
     for decl_id in ast.program.clone() {
