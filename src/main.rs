@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
             "generic",
             "",
             OptimizationLevel::Default,
-            RelocMode::Default,
+            RelocMode::PIC,
             CodeModel::Default,
         )
         .ok_or_else(|| anyhow::anyhow!("Could not create target machine"))?;
