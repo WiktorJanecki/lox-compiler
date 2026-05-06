@@ -1,6 +1,6 @@
-use anyhow::anyhow;
 use crate::ast;
 use crate::ast::{Ast, Node};
+use anyhow::anyhow;
 use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -47,12 +47,15 @@ fn gen_statement(stmt: &Node, module: &Module, ast: &Ast, builder: &Builder) {
         Node::ExprStmt(_) => {}
         Node::IfStmt(_, _, _) => {}
         Node::PrintStmt(expr_id) => {
-            let expr_val = gen_expr(ast.nodes.get(*expr_id).unwrap(), module, ast,builder).unwrap(); // todo return result
-            builder.build_call(
-                printf,
-                &[PointerValue(expr_val.as_pointer_value())],
-                "printf",
-            ).unwrap();
+            let expr_val =
+                gen_expr(ast.nodes.get(*expr_id).unwrap(), module, ast, builder).unwrap(); // todo return result
+            builder
+                .build_call(
+                    printf,
+                    &[PointerValue(expr_val.as_pointer_value())],
+                    "printf",
+                )
+                .unwrap();
         }
         Node::ReturnStmt(_) => {}
         Node::WhileStmt(_, _) => {}
@@ -61,24 +64,24 @@ fn gen_statement(stmt: &Node, module: &Module, ast: &Ast, builder: &Builder) {
     }
 }
 
-fn gen_expr<'c>(expr: & Node, module: &'c Module, ast: & Ast, builder: &'c Builder) -> anyhow::Result<GlobalValue<'c>> {
-    match expr{
+fn gen_expr<'c>(
+    expr: &Node,
+    module: &'c Module,
+    ast: &Ast,
+    builder: &'c Builder,
+) -> anyhow::Result<GlobalValue<'c>> {
+    match expr {
         Node::Assignment(_, _, _) => todo!(),
-        Node::LogicOr(_, _) => todo!(),
-        Node::LogicAnd(_, _) => todo!(),
-        Node::Equality(_, _, _) => todo!(),
-        Node::Comparison(_, _, _) => todo!(),
-        Node::Term(_, _, _) => todo!(),
-        Node::Factor(_, _, _) => todo!(),
+        Node::Binary(_, _, _) => todo!(),
         Node::Unary(_, _) => todo!(),
         Node::Call => todo!(),
         Node::Identifier(_) => todo!(),
         Node::Super(_) => todo!(),
         Node::Grouping(_) => todo!(),
         Node::Number(_) => todo!(),
-        Node::String(s) => {
-            builder.build_global_string_ptr(&format!("{s}\n"), "name").map_err(|_| anyhow!("er"))
-        }
+        Node::String(s) => builder
+            .build_global_string_ptr(&format!("{s}\n"), "name")
+            .map_err(|_| anyhow!("er")),
         Node::Bool(_) => todo!(),
         Node::Nil => todo!(),
         Node::This => todo!(),

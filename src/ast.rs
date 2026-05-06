@@ -43,6 +43,8 @@ pub enum Operator {
 
     // Logic
     Not,
+    Or,
+    And,
 }
 
 pub type NodeID = usize;
@@ -65,12 +67,7 @@ pub enum Node {
 
     // expressions
     Assignment(Option<NodeID>, Id, NodeID), // Call node, lhs id, rhs expression
-    LogicOr(NodeID, NodeID),
-    LogicAnd(NodeID, NodeID),
-    Equality(NodeID, Operator, NodeID),
-    Comparison(NodeID, Operator, NodeID), // we don't need term, factor, logic or nodes, we only need binary and unary with operator
-    Term(NodeID, Operator, NodeID),
-    Factor(NodeID, Operator, NodeID),
+    Binary(NodeID, Operator, NodeID),
     Unary(NodeID, Operator),
     Call, // TODO: store calle
     Identifier(Id),

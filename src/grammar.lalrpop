@@ -104,38 +104,38 @@ Assignment: ast::NodeID ={
 };
 
 LogicOr: ast::NodeID = {
-    <LogicOr> "or" <LogicAnd> => ctx.push(Node::LogicOr(<>, <>)),
+    <LogicOr> "or" <LogicAnd> => ctx.push(Node::Binary(<>,Operator::Or, <>)),
     <LogicAnd>,
 };
 
 LogicAnd: ast::NodeID = {
-    <LogicAnd> "and" <Equality> => ctx.push(Node::LogicAnd(<>, <>)),
+    <LogicAnd> "and" <Equality> => ctx.push(Node::Binary(<>,Operator::And, <>)),
     <Equality>,
 };
 
 Equality: ast::NodeID={
-    <Equality> "==" <Comparison> => ctx.push(Node::Equality(<>, Operator::Eq, <>)),
-    <Equality> "!=" <Comparison> => ctx.push(Node::Equality(<>, Operator::Neq, <>)),
+    <Equality> "==" <Comparison> => ctx.push(Node::Binary(<>, Operator::Eq, <>)),
+    <Equality> "!=" <Comparison> => ctx.push(Node::Binary(<>, Operator::Neq, <>)),
     <Comparison>,
 }
 
 Comparison: ast::NodeID={
-    <Comparison> ">=" <Term> => ctx.push(Node::Comparison(<>, Operator::Geq, <>)),
-    <Comparison> "<=" <Term> => ctx.push(Node::Comparison(<>, Operator::Leq, <>)),
-    <Comparison> "<" <Term> => ctx.push(Node::Comparison(<>, Operator::Less, <>)),
-    <Comparison> ">" <Term> => ctx.push(Node::Comparison(<>, Operator::Greater, <>)),
+    <Comparison> ">=" <Term> => ctx.push(Node::Binary(<>, Operator::Geq, <>)),
+    <Comparison> "<=" <Term> => ctx.push(Node::Binary(<>, Operator::Leq, <>)),
+    <Comparison> "<" <Term> => ctx.push(Node::Binary(<>, Operator::Less, <>)),
+    <Comparison> ">" <Term> => ctx.push(Node::Binary(<>, Operator::Greater, <>)),
     <Term>,
 }
 
 Term: ast::NodeID={
-    <Term> "+" <Factor> => ctx.push(Node::Term(<>, Operator::Plus, <>)),
-    <Term> "-" <Factor> => ctx.push(Node::Term(<>, Operator::Minus, <>)),
+    <Term> "+" <Factor> => ctx.push(Node::Binary(<>, Operator::Plus, <>)),
+    <Term> "-" <Factor> => ctx.push(Node::Binary(<>, Operator::Minus, <>)),
     <Factor>,
 }
 
 Factor: ast::NodeID={
-    <Factor> "*" <Unary> => ctx.push(Node::Factor(<>, Operator::Mul, <>)),
-    <Factor> "/" <Unary> => ctx.push(Node::Factor(<>, Operator::Div, <>)),
+    <Factor> "*" <Unary> => ctx.push(Node::Binary(<>, Operator::Mul, <>)),
+    <Factor> "/" <Unary> => ctx.push(Node::Binary(<>, Operator::Div, <>)),
     <Unary>,
 }
 
