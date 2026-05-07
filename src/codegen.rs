@@ -2,6 +2,7 @@ use crate::ast;
 use crate::ast::{Ast, Node};
 use anyhow::anyhow;
 use inkwell::AddressSpace;
+use inkwell::AtomicRMWBinOp::Add;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -23,7 +24,7 @@ fn gen_extern_functions(module: &Module) {
     module.add_function("exit", tp, Some(Linkage::External));
 }
 
-fn gen_panic_fn<'a>(module: &'a Module, builder: &Builder) -> FunctionValue<'a> {
+fn gen_panic_fn<'a>(module: &Module<'a>, builder: &Builder) -> FunctionValue<'a> {
     let context = module.get_context();
     let str = context.ptr_type(AddressSpace::default());
     let tp = context.void_type().fn_type(&[PointerType(str)], false);
@@ -42,85 +43,228 @@ fn gen_panic_fn<'a>(module: &'a Module, builder: &Builder) -> FunctionValue<'a> 
     builder.build_unreachable();
     panic_fn
 }
-fn gen_lox_object<'a>(module: &'a Module, builder: &Builder) -> StructType<'a> {
-    let context = module.get_context();
-    let ti8 = context.i8_type();
-    let tbiggest = context.i64_type();
-    let lox_obj = context.struct_type(&[ti8.into(), tbiggest.into()], true);
+fn gen_lox_object(ctx: &Context) -> StructType {
+    let ti8 = lox_index_type(ctx);
+    let tbiggest = ctx.i64_type();
+    let lox_obj = ctx.struct_type(&[ti8.into(), tbiggest.into()], true);
     lox_obj
 }
 
-fn gen_begin_main<'a>(module: &'a Module, builder: &Builder) -> BasicBlock<'a> {
-    let context = module.get_context();
-    let main_fn = module.add_function("main", context.i32_type().fn_type(&[], false), None);
-    let entry = context.append_basic_block(main_fn, "entry");
-    builder.position_at_end(entry);
-    entry
+fn gen_begin_main(state: &mut State) {
+    let main_fn = state
+        .module
+        .add_function("main", state.ctx.i32_type().fn_type(&[], false), None);
+    let entry = state.ctx.append_basic_block(main_fn, "entry");
+    state.builder.position_at_end(entry);
 }
 
-fn gen_return_zero(module: &Module, builder: &Builder) -> anyhow::Result<()> {
-    let context = module.get_context();
-    let zero = context.i32_type().const_int(0, false);
-    builder.build_return(Some(&zero))?;
+fn gen_return_zero(state: &mut State) -> anyhow::Result<()> {
+    let zero = state.ctx.i32_type().const_int(0, false);
+    state.builder.build_return(Some(&zero))?;
     Ok(())
 }
 
-fn gen_declaration(decl: &Node, module: &Module, ast: &Ast, builder: &Builder) {
+fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     match decl {
         Node::VarDecl(_, _) => todo!(),
         Node::ClassDecl(_, _, _) => todo!(),
         Node::FunDecl(_, _, _) => todo!(),
-        Node::Stmt(stmtID) => gen_statement(&ast.nodes[*stmtID], module, ast, builder),
+        Node::Stmt(stmtID) => gen_statement(&ast.nodes[*stmtID], ast, state),
         _ => unreachable!("In program vector only decl nodes are pushed during parsing"),
     }
 }
 
-fn gen_statement(stmt: &Node, module: &Module, ast: &Ast, builder: &Builder) {
-    let printf = module.get_function("printf").unwrap();
+fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
+    let printf = state
+        .module
+        .get_function("printf")
+        .expect("used after gen_extern_functions");
+
     match stmt {
-        Node::ExprStmt(_) => {}
-        Node::IfStmt(_, _, _) => {}
+        Node::ExprStmt(_) => todo!(),
+        Node::IfStmt(_, _, _) => todo!(),
         Node::PrintStmt(expr_id) => {
-            let expr_val =
-                gen_expr(ast.nodes.get(*expr_id).unwrap(), module, ast, builder).unwrap(); // todo return result
-            builder
+            let lox_val = gen_expr(ast.nodes.get(*expr_id).unwrap(), ast, state)?;
+            let index_ptr =
+                state
+                    .builder
+                    .build_struct_gep(state.lox_value, lox_val, 0, "tag_ptr")?;
+            let union_ptr =
+                state
+                    .builder
+                    .build_struct_gep(state.lox_value, lox_val, 1, "union_ptr")?;
+
+            let tag_val = state.builder.build_load(lox_index_type(state.ctx), index_ptr, "tag")?.into_int_value();
+            let parent_func = state.builder.get_insert_block().unwrap().get_parent().unwrap();
+            let nil_block = state.ctx.append_basic_block(parent_func, "print.nil");
+            let num_block=  state.ctx.append_basic_block(parent_func, "print.number");
+            let str_block = state.ctx.append_basic_block(parent_func, "print.string");
+            let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
+            let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
+            let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
+
+            let cases = &[
+                (LoxValueType::Nil.llvm_int(state.ctx), nil_block),
+                (LoxValueType::Number.llvm_int(state.ctx), num_block),
+                (LoxValueType::Bool.llvm_int(state.ctx), bool_block),
+                (LoxValueType::String.llvm_int(state.ctx), str_block),
+            ];
+            assert_eq!(cases.len(), LoxValueType::SIZE as usize);
+
+            state.builder.build_switch(tag_val, unreach_block,cases )?;
+
+            state.builder.position_at_end(unreach_block);
+            state.builder.build_unreachable()?;
+
+            state.builder.position_at_end(nil_block);
+
+            let nil_literal = state.builder.build_global_string_ptr("<nil>\n", "str")?;
+            state.builder
                 .build_call(
                     printf,
-                    &[PointerValue(expr_val.as_pointer_value())],
+                    &[nil_literal.as_pointer_value().into()],
                     "printf",
                 )
                 .unwrap();
+            state.builder.build_unconditional_branch(merge_block)?;
+
+            state.builder.position_at_end(bool_block);
+            let bool_literal = state.builder.build_global_string_ptr("%d\n", "str")?;
+            let bool_type = state.ctx.bool_type();
+            let bool_val = state.builder.build_load(bool_type,union_ptr, "bool")?;
+            state.builder
+                .build_call(
+                    printf,
+                    &[bool_literal.as_pointer_value().into(), bool_val.into()],
+                    "printf",
+                )?;
+            state.builder.build_unconditional_branch(merge_block)?;
+
+            state.builder.position_at_end(num_block);
+            let float_literal = state.builder.build_global_string_ptr("%f\n", "str")?;
+            let float_type = state.ctx.f64_type();
+            let float_val = state.builder.build_load(float_type,union_ptr, "float")?;
+            state.builder
+                .build_call(
+                    printf,
+                    &[float_literal.as_pointer_value().into(), float_val.into()],
+                    "printf",
+                )?;
+            state.builder.build_unconditional_branch(merge_block)?;
+
+            state.builder.position_at_end(str_block);
+            let str_literal = state.builder.build_global_string_ptr("%s\n", "str")?;
+            let str_type = state.ctx.ptr_type(AddressSpace::default());
+            let str_val = state.builder.build_load(str_type,union_ptr, "str_val")?;
+            state.builder
+                .build_call(
+                    printf,
+                    &[str_literal.as_pointer_value().into(), str_val.into()],
+                    "printf",
+                )?;
+            state.builder.build_unconditional_branch(merge_block)?;
+
+            state.builder.position_at_end(merge_block);
+            Ok(())
         }
-        Node::ReturnStmt(_) => {}
-        Node::WhileStmt(_, _) => {}
-        Node::Block(_) => {}
+        Node::ReturnStmt(_) => todo!(),
+        Node::WhileStmt(_, _) => todo!(),
+        Node::Block(_) => todo!(),
         _ => unreachable!("Stmt node can only have statements -> assured during parsing"),
     }
 }
 
+fn gen_string<'a>(
+    val: &String,
+    state: &mut State<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let ptr = state.builder.build_alloca(state.lox_value, "lox")?;
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 0, "index")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 1, "union")?;
+
+    let index_val = LoxValueType::String as u64;
+    let str_global_ptr = state
+        .builder
+        .build_global_string_ptr(val, "cstr")?
+        .as_pointer_value();
+    state
+        .builder
+        .build_store(index_ptr, state.ctx.i8_type().const_int(index_val, false))?;
+    state.builder.build_store(union_ptr, str_global_ptr)?;
+
+    Ok(ptr)
+}
 fn gen_number<'a>(
     number: f64,
-    module: &'a Module,
-    builder: &'a Builder,
-    loxobj: StructType<'a>,
+    state: &mut State<'a>,
 ) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
-    let context = module.get_context();
-    let ptr = builder.build_alloca(loxobj, "lox")?;
-    let index_ptr = builder.build_struct_gep(loxobj, ptr, 0, "index")?;
-    let union_ptr = builder.build_struct_gep(loxobj, ptr, 1, "union")?;
+    let ptr = state.builder.build_alloca(state.lox_value, "lox")?;
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 0, "index")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 1, "union")?;
 
-    builder.build_store(index_ptr, context.i8_type().const_int(120, false))?;
-    builder.build_store(union_ptr, context.f64_type().const_float(number))?;
+    let index_val = LoxValueType::Number as u64;
+    state
+        .builder
+        .build_store(index_ptr, state.ctx.i8_type().const_int(index_val, false))?;
+    state
+        .builder
+        .build_store(union_ptr, state.ctx.f64_type().const_float(number))?;
+
+    Ok(ptr)
+}
+fn gen_bool<'a>(
+    val: bool,
+    state: &mut State<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let ptr = state.builder.build_alloca(state.lox_value, "lox")?;
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 0, "index")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 1, "union")?;
+
+    let index_val = LoxValueType::Bool as u64;
+    state
+        .builder
+        .build_store(index_ptr, state.ctx.i8_type().const_int(index_val, false))?;
+    state.builder.build_store(
+        union_ptr,
+        state
+            .ctx
+            .bool_type()
+            .const_int(if val { 1 } else { 0 }, false),
+    )?;
 
     Ok(ptr)
 }
 
-fn gen_expr<'c>(
+fn gen_nil<'a>(state: &mut State<'a>) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let ptr = state.builder.build_alloca(state.lox_value, "lox")?;
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, ptr, 0, "index")?;
+
+    let index_val = LoxValueType::Nil as u64;
+    state
+        .builder
+        .build_store(index_ptr, state.ctx.i8_type().const_int(index_val, false))?;
+
+    Ok(ptr)
+}
+fn gen_expr<'a>(
     expr: &Node,
-    module: &'c Module,
     ast: &Ast,
-    builder: &'c Builder,
-) -> anyhow::Result<GlobalValue<'c>> {
+    state: &mut State<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
     match expr {
         Node::Assignment(_, _, _) => todo!(),
         Node::Binary(_, _, _) => todo!(),
@@ -129,38 +273,71 @@ fn gen_expr<'c>(
         Node::Identifier(_) => todo!(),
         Node::Super(_) => todo!(),
         Node::Grouping(_) => todo!(),
-        Node::Number(_) => todo!(),
-        Node::String(s) => builder
-            .build_global_string_ptr(&format!("{s}\n"), "name")
-            .map_err(|_| anyhow!("er")),
-        Node::Bool(_) => todo!(),
-        Node::Nil => todo!(),
+        Node::Number(n) => gen_number(*n, state),
+        Node::String(s) => gen_string(&s, state),
+        Node::Bool(b) => gen_bool(*b, state),
+        Node::Nil => gen_nil(state),
         Node::This => todo!(),
         _ => unreachable!(),
     }
 }
 
-pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module<'_>> {
+struct State<'a> {
+    ctx: &'a Context,
+    module: Module<'a>,
+    builder: Builder<'a>,
+
+    panic_fn: FunctionValue<'a>, // exit with runtime error
+    lox_value: StructType<'a>,   // tagged union of all lox types
+}
+
+#[derive(Copy, Clone)]
+enum LoxValueType {
+    Nil,
+    Number,
+    Bool,
+    String,
+    SIZE,
+}
+impl LoxValueType {
+    fn llvm_int<'a>(&self, ctx: &'a inkwell::context::Context) -> inkwell::values::IntValue<'a> {
+        ctx.i8_type().const_int(*self as u64, false)
+    }
+}
+fn lox_index_type(ctx: &Context) -> inkwell::types::IntType {
+    ctx.i8_type()
+}
+
+pub fn codegen(ast: ast::Ast, context: &mut Context) -> anyhow::Result<Module> {
     let module = context.create_module("main");
     let builder = context.create_builder();
 
+    // generate pseudo runtime
     gen_extern_functions(&module);
     let panic_fn = gen_panic_fn(&module, &builder);
-    let val_struct = gen_lox_object(&module, &builder);
-    let entry_block = gen_begin_main(&module, &builder);
-    builder.position_at_end(entry_block);
+    let lox_value = gen_lox_object(context);
+
+    let mut state = State {
+        ctx: context,
+        module,
+        builder,
+        panic_fn,
+        lox_value,
+    };
+
+    gen_begin_main(&mut state); // builder at @main.entry
     // let str = builder.build_global_string_ptr("PANIC\n", "panic_msg");
     // builder.build_call(panic_fn, &[PointerValue(str?.as_pointer_value())], "_");
-    gen_number(69.0, &module, &builder, val_struct)?;
+    // gen_number(69.0, &module, &builder, val_struct)?;
 
     println!("DECLS: {}", ast.program.len());
     for decl_id in ast.program.clone() {
         println!("DECL: {decl_id}");
         let decl = ast.nodes.get(decl_id).unwrap();
-        gen_declaration(decl, &module, &ast, &builder);
+        gen_declaration(decl, &ast, &mut state)?;
     }
-    gen_return_zero(&module, &builder)?;
+    gen_return_zero(&mut state)?;
 
-    println!("{}", module.to_string());
-    Ok(module)
+    println!("{}", state.module.to_string());
+    Ok(state.module)
 }
