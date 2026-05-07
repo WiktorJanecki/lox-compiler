@@ -1,10 +1,10 @@
 use crate::cli::EmittingType;
 use clap::Parser;
 use inkwell::OptimizationLevel;
+use inkwell::context::Context;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use loxc::*;
 use std::process::Command;
-use inkwell::context::Context;
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();

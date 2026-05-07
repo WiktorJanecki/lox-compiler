@@ -1,11 +1,11 @@
-use inkwell::context::Context;
 use inkwell::OptimizationLevel;
+use inkwell::context::Context;
 use loxc::ast::Ast;
 use loxc::codegen::codegen;
 use loxc::parser::parse;
 
 #[test]
-fn empty() -> anyhow::Result<()>{
+fn empty() -> anyhow::Result<()> {
     // empty script should compile and have entrypoint
 
     let ast = Ast::new();
@@ -17,7 +17,7 @@ fn empty() -> anyhow::Result<()>{
 }
 
 #[test]
-fn expr() -> anyhow::Result<()>{
+fn expr() -> anyhow::Result<()> {
     let ast = parse("print 2+2;")?;
 
     let mut context = Context::create();
