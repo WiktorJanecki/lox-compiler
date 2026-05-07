@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::ast::{Ast, Node};
+use crate::ast::{Ast, Node, Operator};
 use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -258,14 +258,193 @@ fn gen_nil<'a>(state: &mut State<'a>) -> anyhow::Result<inkwell::values::Pointer
 
     Ok(ptr)
 }
+
+fn gen_plus<'a>(
+    l: &Node,
+    r: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let left = gen_expr(l, ast, state)?;
+    let right = gen_expr(r, ast, state)?;
+
+    let left_index_ptr =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, left, 0, "left_tag_ptr")?;
+    let left_union_ptr =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, left, 1, "left_union_ptr")?;
+
+    let tag_val = state
+        .builder
+        .build_load(lox_index_type(state.ctx), left_index_ptr, "left_tag")?
+        .into_int_value();
+    let right_index_ptr =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, right, 0, "right_tag_ptr")?;
+    let right_union_ptr =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, right, 1, "right_union_ptr")?;
+
+    let right_tag_val = state
+        .builder
+        .build_load(lox_index_type(state.ctx), right_index_ptr, "right_tag")?
+        .into_int_value();
+
+    let parent_func = state
+        .builder
+        .get_insert_block()
+        .unwrap()
+        .get_parent()
+        .unwrap();
+    let num_block = state.ctx.append_basic_block(parent_func, "print.number");
+    let str_block = state.ctx.append_basic_block(parent_func, "print.string");
+    let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
+    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
+    let panic_mismatched_block = state
+        .ctx
+        .append_basic_block(parent_func, "print.panic.mismatched");
+    let panic_unsupported_block = state
+        .ctx
+        .append_basic_block(parent_func, "print.panic.unsupported");
+
+    // only num + num and str+str is accepted, other types = instant panic
+    let cases = &[
+        (LoxValueType::String.llvm_int(state.ctx), str_block),
+        (LoxValueType::Number.llvm_int(state.ctx), num_block),
+        (
+            LoxValueType::Bool.llvm_int(state.ctx),
+            panic_unsupported_block,
+        ),
+        (
+            LoxValueType::Nil.llvm_int(state.ctx),
+            panic_unsupported_block,
+        ),
+    ];
+    assert_eq!(cases.len(), LoxValueType::SIZE as usize);
+
+    let lox_result = state.builder.build_alloca(state.lox_value, "lox_result")?;
+    state.builder.build_switch(tag_val, unreach_block, cases)?;
+
+    state.builder.position_at_end(unreach_block);
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(panic_mismatched_block); // TODO: dont generate messages every add node
+    let error_msg = state.builder.build_global_string_ptr(
+        "Runtime error: Mismatched types used on + operand\n",
+        "errstr",
+    )?;
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(panic_unsupported_block);
+    let error_msg = state.builder.build_global_string_ptr(
+        "Runtime error: Only Number and String can be added using + operand\n",
+        "errstr",
+    )?;
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+    state.builder.build_unreachable()?;
+
+    /// NUMBER
+    state.builder.position_at_end(num_block);
+    let comp = state.builder.build_int_compare(
+        inkwell::IntPredicate::EQ,
+        tag_val,
+        right_tag_val,
+        "comp_tags",
+    )?;
+    let cont = state
+        .ctx
+        .append_basic_block(parent_func, "add.cmp.types.passed");
+    state
+        .builder
+        .build_conditional_branch(comp, cont, panic_mismatched_block)?;
+    state.builder.position_at_end(cont);
+
+    let float_t = state.ctx.f64_type();
+    let left_fval = state
+        .builder
+        .build_load(float_t, left_union_ptr, "left_fval")?
+        .into_float_value();
+    let right_fval = state
+        .builder
+        .build_load(float_t, right_union_ptr, "right_fval")?
+        .into_float_value();
+    let sum_fval = state
+        .builder
+        .build_float_add(left_fval, right_fval, "sum_fval")?;
+    // gen number (should be func)
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, lox_result, 0, "index")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, lox_result, 1, "union")?;
+
+    let index_val = LoxValueType::Number as u64;
+    state
+        .builder
+        .build_store(index_ptr, state.ctx.i8_type().const_int(index_val, false))?;
+    state.builder.build_store(union_ptr, sum_fval)?;
+    state.builder.build_unconditional_branch(merge_block)?;
+
+    // STRING
+    state.builder.position_at_end(str_block);
+    let comp = state.builder.build_int_compare(
+        inkwell::IntPredicate::EQ,
+        tag_val,
+        right_tag_val,
+        "comp_tags",
+    )?;
+    let cont = state
+        .ctx
+        .append_basic_block(parent_func, "add.cmp.types.passed");
+    state
+        .builder
+        .build_conditional_branch(comp, cont, panic_mismatched_block)?;
+    state.builder.position_at_end(cont);
+    // check if other is str else panic
+    // alloca new lox value, set tag to str, set val to concatenated cstring XD
+
+    // TODO: finish
+    // state.builder.build_unconditional_branch(merge_block)?;
+    // TODO: uncomment and delete below
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(merge_block);
+
+    Ok(lox_result)
+}
 fn gen_expr<'a>(
     expr: &Node,
-    _ast: &Ast,
+    ast: &Ast,
     state: &mut State<'a>,
 ) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
     match expr {
         Node::Assignment(_, _, _) => todo!(),
-        Node::Binary(_, _, _) => todo!(),
+        Node::Binary(l, op, r) => match op {
+            Operator::Eq => todo!(),
+            Operator::Neq => todo!(),
+            Operator::Geq => todo!(),
+            Operator::Leq => todo!(),
+            Operator::Less => todo!(),
+            Operator::Greater => todo!(),
+            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Minus => todo!(),
+            Operator::Mul => todo!(),
+            Operator::Div => todo!(),
+            Operator::Or => todo!(),
+            Operator::And => todo!(),
+            Operator::Not => unreachable!(),
+        },
         Node::Unary(_, _) => todo!(),
         Node::Call => todo!(),
         Node::Identifier(_) => todo!(),
@@ -338,5 +517,8 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
     gen_return_zero(&mut state)?;
 
     println!("{}", state.module.to_string());
+    if let Err(err) = state.module.verify() {
+        eprintln!("Błąd weryfikacji IR: {}", err.to_string());
+    }
     Ok(state.module)
 }
