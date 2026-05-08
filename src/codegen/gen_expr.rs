@@ -1,9 +1,8 @@
 use crate::ast::{Ast, Node, Operator};
-use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals,
-    global_string_literal, lox_index_type,
-};
 use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
+use crate::codegen::{
+    LoxValue, LoxValueType, State, StringLiterals, global_string_literal, lox_index_type,
+};
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
@@ -316,7 +315,6 @@ fn gen_mul<'a>(
     gen_store_number(&lox_result, result_fval, state)?;
     Ok(lox_result)
 }
-
 
 fn gen_div<'a>(
     l: &Node,
