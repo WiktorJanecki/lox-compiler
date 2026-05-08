@@ -123,51 +123,45 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
 
     state.builder.position_at_end(nil_block);
 
-    let nil_literal = state.builder.build_global_string_ptr("<nil>\n", "str")?;
+    let nil_literal = global_string_literal(StringLiterals::PrintfNil, state);
     state
         .builder
-        .build_call(printf, &[nil_literal.as_pointer_value().into()], "printf")
+        .build_call(printf, &[nil_literal.into()], "printf")
         .unwrap();
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(bool_block);
-    // TODO: ALL THOSE FORMAT LITERALS should be created only once
-    let bool_literal = state.builder.build_global_string_ptr("%d\n", "str")?;
+
+    let bool_literal = global_string_literal(StringLiterals::PrintfBool, state);
     let bool_type = state.ctx.bool_type();
     let bool_val = state
         .builder
         .build_load(bool_type, lox_val.union_ptr, "bool")?;
-    state.builder.build_call(
-        printf,
-        &[bool_literal.as_pointer_value().into(), bool_val.into()],
-        "printf",
-    )?;
+    state
+        .builder
+        .build_call(printf, &[bool_literal.into(), bool_val.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(num_block);
-    let float_literal = state.builder.build_global_string_ptr("%f\n", "str")?;
+    let float_literal = global_string_literal(StringLiterals::PrintfNumber, state);
     let float_type = state.ctx.f64_type();
     let float_val = state
         .builder
         .build_load(float_type, lox_val.union_ptr, "float")?;
-    state.builder.build_call(
-        printf,
-        &[float_literal.as_pointer_value().into(), float_val.into()],
-        "printf",
-    )?;
+    state
+        .builder
+        .build_call(printf, &[float_literal.into(), float_val.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(str_block);
-    let str_literal = state.builder.build_global_string_ptr("%s\n", "str")?;
+    let str_literal = global_string_literal(StringLiterals::PrintfString, state);
     let str_type = state.ctx.ptr_type(AddressSpace::default());
     let str_val = state
         .builder
         .build_load(str_type, lox_val.union_ptr, "str_val")?;
-    state.builder.build_call(
-        printf,
-        &[str_literal.as_pointer_value().into(), str_val.into()],
-        "printf",
-    )?;
+    state
+        .builder
+        .build_call(printf, &[str_literal.into(), str_val.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(merge_block);
@@ -277,24 +271,18 @@ fn gen_plus<'a>(
     state.builder.position_at_end(unreach_block);
     state.builder.build_unreachable()?;
 
-    state.builder.position_at_end(mismatched_block); // TODO: dont generate messages every add node
-    let error_msg = state.builder.build_global_string_ptr(
-        "Runtime error: Mismatched types used on + operand\n",
-        "errstr",
-    )?;
+    state.builder.position_at_end(mismatched_block);
+    let error_msg = global_string_literal(StringLiterals::RePlusMismatchedTypes, state);
     state
         .builder
-        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
     state.builder.build_unreachable()?;
 
     state.builder.position_at_end(unsupported_block);
-    let error_msg = state.builder.build_global_string_ptr(
-        "Runtime error: Only Number and String can be added using + operand\n",
-        "errstr",
-    )?;
+    let error_msg = global_string_literal(StringLiterals::RePlusUnsupportedType, state);
     state
         .builder
-        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
     state.builder.build_unreachable()?;
 
     /// NUMBER
@@ -375,7 +363,7 @@ fn gen_minus<'a>(
         .append_basic_block(parent_func, "minus.cmp.types.passed");
     state
         .builder
-        .build_conditional_branch(comp, cont,unsupported_block)?;
+        .build_conditional_branch(comp, cont, unsupported_block)?;
     state.builder.position_at_end(cont);
 
     let comp_if_int = state.builder.build_int_compare(
@@ -386,16 +374,13 @@ fn gen_minus<'a>(
     )?;
     state
         .builder
-        .build_conditional_branch(comp_if_int, merge_block,unsupported_block)?;
+        .build_conditional_branch(comp_if_int, merge_block, unsupported_block)?;
 
     state.builder.position_at_end(unsupported_block);
-    let error_msg = state.builder.build_global_string_ptr(
-        "Runtime error: Only Number can be substracted using - operand\n",
-        "errstr",
-    )?;
+    let error_msg = global_string_literal(StringLiterals::ReMinusUnsupportedType, state);
     state
         .builder
-        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
     state.builder.build_unreachable()?;
     state.builder.position_at_end(merge_block);
 
@@ -452,9 +437,9 @@ struct State<'a> {
     module: Module<'a>,
     builder: Builder<'a>,
 
-    #[allow(unused)]
     panic_fn: FunctionValue<'a>, // exit with runtime error
-    lox_value: StructType<'a>, // tagged union of all lox types
+    lox_value: StructType<'a>,   // tagged union of all lox types
+    string_literals: [values::PointerValue<'a>; StringLiterals::SIZE as usize],
 }
 
 #[derive(Copy, Clone)]
@@ -564,9 +549,48 @@ fn gen_store_bool<'a>(
     state.builder.build_store(var.union_ptr, bol)?;
     Ok(())
 }
+
+enum StringLiterals {
+    PrintfNumber,
+    PrintfString,
+    PrintfNil,
+    PrintfBool,
+
+    RePlusMismatchedTypes,
+    RePlusUnsupportedType,
+    ReMinusUnsupportedType,
+
+    #[allow(clippy::upper_case_acronyms)]
+    SIZE,
+}
 // it should be const but cannot cuz depends on context
 fn lox_index_type(ctx: &'_ Context) -> inkwell::types::IntType<'_> {
     ctx.i8_type()
+}
+
+fn gen_global_string_literals<'a>(
+    b: &Builder<'a>,
+) -> anyhow::Result<[values::PointerValue<'a>; StringLiterals::SIZE as usize]> {
+    let f = |mes: &'static str| {
+        b.build_global_string_ptr(mes, "compiler_printf_literal")
+            .map(|e| e.as_pointer_value())
+    };
+    let arr: [values::PointerValue<'a>; StringLiterals::SIZE as usize] = [
+        // printf
+        f("%f\n")?,
+        f("%s\n")?,
+        f("<nil>\n")?,
+        f("%d\n")?,
+        // Re
+        f("Runtime error: Mismatched types used on + operand\n")?,
+        f("Runtime error: Only Number and string can be used with + operand\n")?,
+        f("Runtime error: Only Number can be used with - operand\n")?,
+    ];
+    Ok(arr)
+}
+
+fn global_string_literal<'a>(which: StringLiterals, state: &State<'a>) -> values::PointerValue<'a> {
+    state.string_literals[which as usize]
 }
 
 pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module<'_>> {
@@ -577,6 +601,7 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
     gen_extern_functions(&module);
     let panic_fn = gen_panic_fn(&module, &builder)?;
     let lox_value = gen_lox_object(context);
+    let string_literals = gen_global_string_literals(&builder)?;
 
     let mut state = State {
         ctx: context,
@@ -584,6 +609,7 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
         builder,
         panic_fn,
         lox_value,
+        string_literals,
     };
 
     gen_begin_main(&mut state); // builder at @main.entry
