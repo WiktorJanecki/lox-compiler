@@ -1,5 +1,8 @@
 use crate::ast::{Ast, Node, Operator};
-use crate::codegen::{gen_alloc_lox_value, gen_store_number, global_string_literal, lox_index_type, LoxValue, LoxValueType, State, StringLiterals};
+use crate::codegen::{
+    LoxValue, LoxValueType, State, StringLiterals, gen_alloc_lox_value, gen_store_number,
+    global_string_literal, lox_index_type,
+};
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
@@ -255,7 +258,7 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
         Node::Call => todo!(),
         Node::Identifier(_) => todo!(),
         Node::Super(_) => todo!(),
-        Node::Grouping(_) => todo!(),
+        Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
         Node::Number(n) => gen_number(*n, state),
         Node::String(s) => gen_string(s, state),
         Node::Bool(b) => gen_bool(*b, state),
@@ -264,4 +267,3 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
         _ => unreachable!(),
     }
 }
-
