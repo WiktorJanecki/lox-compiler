@@ -305,56 +305,14 @@ fn gen_plus<'a>(
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
     let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
-    let panic_mismatched_block = state
+    let mismatched_block = state
         .ctx
         .append_basic_block(parent_func, "print.panic.mismatched");
-    let panic_unsupported_block = state
+    let unsupported_block = state
         .ctx
         .append_basic_block(parent_func, "print.panic.unsupported");
 
-    // only num + num and str+str is accepted, other types = instant panic
-    let cases = &[
-        (LoxValueType::String.llvm_int(state.ctx), str_block),
-        (LoxValueType::Number.llvm_int(state.ctx), num_block),
-        (
-            LoxValueType::Bool.llvm_int(state.ctx),
-            panic_unsupported_block,
-        ),
-        (
-            LoxValueType::Nil.llvm_int(state.ctx),
-            panic_unsupported_block,
-        ),
-    ];
-    assert_eq!(cases.len(), LoxValueType::SIZE as usize);
-
-    let lox_result = state.builder.build_alloca(state.lox_value, "lox_result")?;
-    state.builder.build_switch(tag_val, unreach_block, cases)?;
-
-    state.builder.position_at_end(unreach_block);
-    state.builder.build_unreachable()?;
-
-    state.builder.position_at_end(panic_mismatched_block); // TODO: dont generate messages every add node
-    let error_msg = state.builder.build_global_string_ptr(
-        "Runtime error: Mismatched types used on + operand\n",
-        "errstr",
-    )?;
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
-    state.builder.build_unreachable()?;
-
-    state.builder.position_at_end(panic_unsupported_block);
-    let error_msg = state.builder.build_global_string_ptr(
-        "Runtime error: Only Number and String can be added using + operand\n",
-        "errstr",
-    )?;
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
-    state.builder.build_unreachable()?;
-
-    /// NUMBER
-    state.builder.position_at_end(num_block);
+    // Compare types -> if mismatched panic
     let comp = state.builder.build_int_compare(
         inkwell::IntPredicate::EQ,
         tag_val,
@@ -366,8 +324,47 @@ fn gen_plus<'a>(
         .append_basic_block(parent_func, "add.cmp.types.passed");
     state
         .builder
-        .build_conditional_branch(comp, cont, panic_mismatched_block)?;
+        .build_conditional_branch(comp, cont, mismatched_block)?;
     state.builder.position_at_end(cont);
+
+    let lox_result = state.builder.build_alloca(state.lox_value, "lox_result")?;
+
+    // only num + num and str+str is accepted, other types = instant panic
+    let cases = &[
+        (LoxValueType::String.llvm_int(state.ctx), str_block),
+        (LoxValueType::Number.llvm_int(state.ctx), num_block),
+        (LoxValueType::Bool.llvm_int(state.ctx), unsupported_block),
+        (LoxValueType::Nil.llvm_int(state.ctx), unsupported_block),
+    ];
+    assert_eq!(cases.len(), LoxValueType::SIZE as usize);
+    state.builder.build_switch(tag_val, unreach_block, cases)?;
+
+    state.builder.position_at_end(unreach_block);
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(mismatched_block); // TODO: dont generate messages every add node
+    let error_msg = state.builder.build_global_string_ptr(
+        "Runtime error: Mismatched types used on + operand\n",
+        "errstr",
+    )?;
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(unsupported_block);
+    let error_msg = state.builder.build_global_string_ptr(
+        "Runtime error: Only Number and String can be added using + operand\n",
+        "errstr",
+    )?;
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+    state.builder.build_unreachable()?;
+
+    /// NUMBER
+    state.builder.position_at_end(num_block);
+    // assert both types are number
 
     let float_t = state.ctx.f64_type();
     let left_fval = state
@@ -398,19 +395,8 @@ fn gen_plus<'a>(
 
     // STRING
     state.builder.position_at_end(str_block);
-    let comp = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
-        tag_val,
-        right_tag_val,
-        "comp_tags",
-    )?;
-    let cont = state
-        .ctx
-        .append_basic_block(parent_func, "add.cmp.types.passed");
-    state
-        .builder
-        .build_conditional_branch(comp, cont, panic_mismatched_block)?;
-    state.builder.position_at_end(cont);
+    // assert both types are str
+
     // check if other is str else panic
     // alloca new lox value, set tag to str, set val to concatenated cstring XD
 
