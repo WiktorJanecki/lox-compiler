@@ -1,8 +1,9 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_alloc_lox_value, gen_store_number,
+    LoxValue, LoxValueType, State, StringLiterals,
     global_string_literal, lox_index_type,
 };
+use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;

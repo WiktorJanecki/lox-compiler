@@ -8,8 +8,12 @@ use inkwell::types::StructType;
 use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, types, values};
 use crate::codegen::gen_expr::gen_expr;
+use crate::codegen::lox_value::{LoxValue, LoxValueType};
+use crate::codegen::string_literals::{gen_global_string_literals, global_string_literal, StringLiterals};
 
 mod gen_expr;
+mod lox_value;
+mod string_literals;
 
 fn gen_extern_functions(module: &Module) {
     // printf
@@ -182,156 +186,12 @@ struct State<'a> {
     string_literals: [values::PointerValue<'a>; StringLiterals::SIZE as usize],
 }
 
-#[derive(Copy, Clone)]
-enum LoxValueType {
-    Nil,
-    Number,
-    Bool,
-    String,
 
-    #[allow(clippy::upper_case_acronyms)]
-    SIZE,
-}
-impl LoxValueType {
-    fn llvm_int<'a>(&self, ctx: &'a inkwell::context::Context) -> inkwell::values::IntValue<'a> {
-        ctx.i8_type().const_int(*self as u64, false)
-    }
-}
-
-struct LoxValue<'a> {
-    ptr: values::PointerValue<'a>,
-    union_ptr: values::PointerValue<'a>,
-    index_ptr: values::PointerValue<'a>,
-}
-
-fn gen_unpack_lox_value<'a>(
-    val: &LoxValue<'a>,
-    state: &mut State<'a>,
-) -> anyhow::Result<(values::IntValue<'a>, values::PointerValue<'a>)> {
-    let index_ptr = state
-        .builder
-        .build_struct_gep(state.lox_value, val.ptr, 0, "left_tag_ptr")?;
-    let union_ptr =
-        state
-            .builder
-            .build_struct_gep(state.lox_value, val.ptr, 1, "left_union_ptr")?;
-
-    let tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), index_ptr, "left_tag")?
-        .into_int_value();
-
-    Ok((tag_val, union_ptr))
-}
-
-fn gen_alloc_lox_value<'a>(
-    typee: LoxValueType,
-    state: &mut State<'a>,
-) -> anyhow::Result<LoxValue<'a>> {
-    let ptr = state.builder.build_alloca(state.lox_value, "lox_val_ptr")?;
-    let index_ptr = state
-        .builder
-        .build_struct_gep(state.lox_value, ptr, 0, "index")?;
-    let union_ptr = state
-        .builder
-        .build_struct_gep(state.lox_value, ptr, 1, "union")?;
-
-    let index_val = typee as u64;
-    state.builder.build_store(
-        index_ptr,
-        lox_index_type(state.ctx).const_int(index_val, false),
-    )?;
-    Ok(LoxValue {
-        ptr,
-        union_ptr,
-        index_ptr,
-    })
-}
-
-fn gen_store_number<'a>(
-    var: &LoxValue<'a>,
-    num: values::FloatValue<'a>,
-    state: &mut State<'a>,
-) -> anyhow::Result<()> {
-    let index_val = LoxValueType::Number as u64;
-    state.builder.build_store(
-        var.index_ptr,
-        lox_index_type(state.ctx).const_int(index_val, false),
-    )?;
-    state.builder.build_store(var.union_ptr, num)?;
-    Ok(())
-}
-
-fn gen_store_string<'a>(
-    var: &LoxValue<'a>,
-    cstr: values::PointerValue<'a>,
-    state: &mut State<'a>,
-) -> anyhow::Result<()> {
-    let index_val = LoxValueType::String as u64;
-    state.builder.build_store(
-        var.index_ptr,
-        lox_index_type(state.ctx).const_int(index_val, false),
-    )?;
-    state.builder.build_store(var.union_ptr, cstr)?;
-    Ok(())
-}
-
-fn gen_store_bool<'a>(
-    var: &LoxValue<'a>,
-    bol: values::IntValue<'a>,
-    state: &mut State<'a>,
-) -> anyhow::Result<()> {
-    let index_val = LoxValueType::Bool as u64;
-    state.builder.build_store(
-        var.index_ptr,
-        lox_index_type(state.ctx).const_int(index_val, false),
-    )?;
-    state.builder.build_store(var.union_ptr, bol)?;
-    Ok(())
-}
-
-enum StringLiterals {
-    PrintfNumber,
-    PrintfString,
-    PrintfNil,
-    PrintfBool,
-
-    RePlusMismatchedTypes,
-    RePlusUnsupportedType,
-    ReMinusUnsupportedType,
-
-    #[allow(clippy::upper_case_acronyms)]
-    SIZE,
-}
 // it should be const but cannot cuz depends on context
 fn lox_index_type(ctx: &'_ Context) -> inkwell::types::IntType<'_> {
     ctx.i8_type()
 }
 
-fn gen_global_string_literals<'a>(
-    b: &Builder<'a>,
-) -> anyhow::Result<[values::PointerValue<'a>; StringLiterals::SIZE as usize]> {
-    let f = |mes: &'static str| {
-        b.build_global_string_ptr(mes, "compiler_printf_literal")
-            .map(|e| e.as_pointer_value())
-    };
-    let arr: [values::PointerValue<'a>; StringLiterals::SIZE as usize] = [
-        // printf
-        f("%f\n")?,
-        f("%s\n")?,
-        f("<nil>\n")?,
-        f("%d\n")?,
-        // Re
-        f("Runtime error: Mismatched types used on + operand\n")?,
-        f("Runtime error: Only Number and string can be used with + operand\n")?,
-        f("Runtime error: Only Number can be used with - operand\n")?,
-    ];
-    Ok(arr)
-}
-
-fn global_string_literal<'a>(which: StringLiterals, state: &State<'a>) -> values::PointerValue<'a> {
-    state.string_literals[which as usize]
-}
 
 pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module<'_>> {
     let module = context.create_module("main");
