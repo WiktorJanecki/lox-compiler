@@ -7,6 +7,9 @@ use inkwell::types::BasicMetadataTypeEnum::PointerType;
 use inkwell::types::StructType;
 use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, types, values};
+use crate::codegen::gen_expr::gen_expr;
+
+mod gen_expr;
 
 fn gen_extern_functions(module: &Module) {
     // printf
@@ -71,12 +74,13 @@ fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<
 
 fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     match stmt {
-        Node::ExprStmt(_) => todo!(),
+        Node::ExprStmt(expr_id) => {
+            let _ = gen_expr(&ast.nodes[*expr_id],ast,state)?;
+            Ok(())
+        },
         Node::IfStmt(_, _, _) => todo!(),
         Node::PrintStmt(expr_id) => {
-            // evaluate expr
-            let lox_val = gen_expr(ast.nodes.get(*expr_id).unwrap(), ast, state)?;
-            // print
+            let lox_val = gen_expr(&ast.nodes[*expr_id], ast, state)?;
             gen_print_stmt(lox_val, state)
         }
         Node::ReturnStmt(_) => todo!(),
@@ -166,270 +170,6 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
 
     state.builder.position_at_end(merge_block);
     Ok(())
-}
-
-fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
-    let str_global_ptr = state
-        .builder
-        .build_global_string_ptr(val, "cstr")?
-        .as_pointer_value();
-    state.builder.build_store(lox.union_ptr, str_global_ptr)?;
-
-    Ok(lox)
-}
-fn gen_number<'a>(number: f64, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    let lox = gen_alloc_lox_value(LoxValueType::Number, state)?;
-    state
-        .builder
-        .build_store(lox.union_ptr, state.ctx.f64_type().const_float(number))?;
-
-    Ok(lox)
-}
-fn gen_bool<'a>(val: bool, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    let lox = gen_alloc_lox_value(LoxValueType::Bool, state)?;
-    state.builder.build_store(
-        lox.union_ptr,
-        state
-            .ctx
-            .bool_type()
-            .const_int(if val { 1 } else { 0 }, false),
-    )?;
-
-    Ok(lox)
-}
-
-fn gen_nil<'a>(state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    gen_alloc_lox_value(LoxValueType::Nil, state)
-}
-
-fn gen_plus<'a>(
-    l: &Node,
-    r: &Node,
-    ast: &Ast,
-    state: &mut State<'a>,
-) -> anyhow::Result<LoxValue<'a>> {
-    let left = gen_expr(l, ast, state)?;
-    let right = gen_expr(r, ast, state)?;
-
-    let left_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
-        .into_int_value();
-    let right_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
-        .into_int_value();
-
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
-    let num_block = state.ctx.append_basic_block(parent_func, "print.number");
-    let str_block = state.ctx.append_basic_block(parent_func, "print.string");
-    let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
-    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
-    let mismatched_block = state
-        .ctx
-        .append_basic_block(parent_func, "print.panic.mismatched");
-    let unsupported_block = state
-        .ctx
-        .append_basic_block(parent_func, "print.panic.unsupported");
-
-    // Compare types -> if mismatched panic
-    let comp = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
-        left_tag_val,
-        right_tag_val,
-        "comp_tags",
-    )?;
-    let cont = state
-        .ctx
-        .append_basic_block(parent_func, "add.cmp.types.passed");
-    state
-        .builder
-        .build_conditional_branch(comp, cont, mismatched_block)?;
-    state.builder.position_at_end(cont);
-
-    // put nil but don't use it
-    let lox_result = gen_alloc_lox_value(LoxValueType::Nil, state)?;
-
-    // only num + num and str+str is accepted, other types = instant panic
-    let cases = &[
-        (LoxValueType::String.llvm_int(state.ctx), str_block),
-        (LoxValueType::Number.llvm_int(state.ctx), num_block),
-        (LoxValueType::Bool.llvm_int(state.ctx), unsupported_block),
-        (LoxValueType::Nil.llvm_int(state.ctx), unsupported_block),
-    ];
-    assert_eq!(cases.len(), LoxValueType::SIZE as usize);
-    state
-        .builder
-        .build_switch(left_tag_val, unreach_block, cases)?;
-
-    state.builder.position_at_end(unreach_block);
-    state.builder.build_unreachable()?;
-
-    state.builder.position_at_end(mismatched_block);
-    let error_msg = global_string_literal(StringLiterals::RePlusMismatchedTypes, state);
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
-
-    state.builder.position_at_end(unsupported_block);
-    let error_msg = global_string_literal(StringLiterals::RePlusUnsupportedType, state);
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
-
-    /// NUMBER
-    state.builder.position_at_end(num_block);
-    // assert both types are number
-
-    let float_t = state.ctx.f64_type();
-    let left_fval = state
-        .builder
-        .build_load(float_t, left.union_ptr, "left_fval")?
-        .into_float_value();
-    let right_fval = state
-        .builder
-        .build_load(float_t, right.union_ptr, "right_fval")?
-        .into_float_value();
-    let sum_fval = state
-        .builder
-        .build_float_add(left_fval, right_fval, "sum_fval")?;
-    gen_store_number(&lox_result, sum_fval, state)?;
-
-    state.builder.build_unconditional_branch(merge_block)?;
-
-    // STRING
-    state.builder.position_at_end(str_block);
-    // assert both types are str
-
-    // check if other is str else panic
-    // alloca new lox value, set tag to str, set val to concatenated cstring XD
-
-    // TODO: finish
-    // state.builder.build_unconditional_branch(merge_block)?;
-    // TODO: uncomment and delete below
-    state.builder.build_unreachable()?;
-
-    state.builder.position_at_end(merge_block);
-
-    Ok(lox_result)
-}
-
-fn gen_minus<'a>(
-    l: &Node,
-    r: &Node,
-    ast: &Ast,
-    state: &mut State<'a>,
-) -> anyhow::Result<LoxValue<'a>> {
-    let left = gen_expr(l, ast, state)?;
-    let right = gen_expr(r, ast, state)?;
-
-    let left_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
-        .into_int_value();
-    let right_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
-        .into_int_value();
-
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
-    let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
-    let unsupported_block = state
-        .ctx
-        .append_basic_block(parent_func, "print.panic.unsupported");
-
-    // Compare types -> if mismatched panic
-    let comp = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
-        left_tag_val,
-        right_tag_val,
-        "comp_tags",
-    )?;
-    let cont = state
-        .ctx
-        .append_basic_block(parent_func, "minus.cmp.types.passed");
-    state
-        .builder
-        .build_conditional_branch(comp, cont, unsupported_block)?;
-    state.builder.position_at_end(cont);
-
-    let comp_if_int = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
-        left_tag_val,
-        lox_index_type(state.ctx).const_int(LoxValueType::Number as u64, false),
-        "if_numb",
-    )?;
-    state
-        .builder
-        .build_conditional_branch(comp_if_int, merge_block, unsupported_block)?;
-
-    state.builder.position_at_end(unsupported_block);
-    let error_msg = global_string_literal(StringLiterals::ReMinusUnsupportedType, state);
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
-    state.builder.position_at_end(merge_block);
-
-    let lox_result = gen_alloc_lox_value(LoxValueType::Number, state)?;
-    let float_t = state.ctx.f64_type();
-    let left_fval = state
-        .builder
-        .build_load(float_t, left.union_ptr, "left_fval")?
-        .into_float_value();
-    let right_fval = state
-        .builder
-        .build_load(float_t, right.union_ptr, "right_fval")?
-        .into_float_value();
-    let result_fval = state
-        .builder
-        .build_float_sub(left_fval, right_fval, "minus_fval")?;
-    gen_store_number(&lox_result, result_fval, state)?;
-    Ok(lox_result)
-}
-fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    match expr {
-        Node::Assignment(_, _, _) => todo!(),
-        Node::Binary(l, op, r) => match op {
-            Operator::Eq => todo!(),
-            Operator::Neq => todo!(),
-            Operator::Geq => todo!(),
-            Operator::Leq => todo!(),
-            Operator::Less => todo!(),
-            Operator::Greater => todo!(),
-            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Minus => gen_minus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Mul => todo!(),
-            Operator::Div => todo!(),
-            Operator::Or => todo!(),
-            Operator::And => todo!(),
-            Operator::Not => unreachable!(),
-        },
-        Node::Unary(_, _) => todo!(),
-        Node::Call => todo!(),
-        Node::Identifier(_) => todo!(),
-        Node::Super(_) => todo!(),
-        Node::Grouping(_) => todo!(),
-        Node::Number(n) => gen_number(*n, state),
-        Node::String(s) => gen_string(s, state),
-        Node::Bool(b) => gen_bool(*b, state),
-        Node::Nil => gen_nil(state),
-        Node::This => todo!(),
-        _ => unreachable!(),
-    }
 }
 
 struct State<'a> {
