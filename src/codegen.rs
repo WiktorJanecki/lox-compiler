@@ -333,6 +333,88 @@ fn gen_plus<'a>(
 
     Ok(lox_result)
 }
+
+fn gen_minus<'a>(
+    l: &Node,
+    r: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    let left = gen_expr(l, ast, state)?;
+    let right = gen_expr(r, ast, state)?;
+
+    let left_tag_val = state
+        .builder
+        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
+        .into_int_value();
+    let right_tag_val = state
+        .builder
+        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
+        .into_int_value();
+
+    let parent_func = state
+        .builder
+        .get_insert_block()
+        .unwrap()
+        .get_parent()
+        .unwrap();
+    let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
+    let unsupported_block = state
+        .ctx
+        .append_basic_block(parent_func, "print.panic.unsupported");
+
+    // Compare types -> if mismatched panic
+    let comp = state.builder.build_int_compare(
+        inkwell::IntPredicate::EQ,
+        left_tag_val,
+        right_tag_val,
+        "comp_tags",
+    )?;
+    let cont = state
+        .ctx
+        .append_basic_block(parent_func, "minus.cmp.types.passed");
+    state
+        .builder
+        .build_conditional_branch(comp, cont,unsupported_block)?;
+    state.builder.position_at_end(cont);
+
+    let comp_if_int = state.builder.build_int_compare(
+        inkwell::IntPredicate::EQ,
+        left_tag_val,
+        lox_index_type(state.ctx).const_int(LoxValueType::Number as u64, false),
+        "if_numb",
+    )?;
+    state
+        .builder
+        .build_conditional_branch(comp_if_int, merge_block,unsupported_block)?;
+
+    state.builder.position_at_end(unsupported_block);
+    let error_msg = state.builder.build_global_string_ptr(
+        "Runtime error: Only Number can be substracted using - operand\n",
+        "errstr",
+    )?;
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.as_pointer_value().into()], "_")?;
+    state.builder.build_unreachable()?;
+    state.builder.position_at_end(merge_block);
+
+    let lox_result = gen_alloc_lox_value(LoxValueType::Number, state)?;
+    let float_t = state.ctx.f64_type();
+    let left_fval = state
+        .builder
+        .build_load(float_t, left.union_ptr, "left_fval")?
+        .into_float_value();
+    let right_fval = state
+        .builder
+        .build_load(float_t, right.union_ptr, "right_fval")?
+        .into_float_value();
+    let result_fval = state
+        .builder
+        .build_float_sub(left_fval, right_fval, "minus_fval")?;
+    gen_store_number(&lox_result, result_fval, state)?;
+    Ok(lox_result)
+}
 fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {
         Node::Assignment(_, _, _) => todo!(),
@@ -344,7 +426,7 @@ fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result
             Operator::Less => todo!(),
             Operator::Greater => todo!(),
             Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Minus => todo!(),
+            Operator::Minus => gen_minus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
             Operator::Mul => todo!(),
             Operator::Div => todo!(),
             Operator::Or => todo!(),
