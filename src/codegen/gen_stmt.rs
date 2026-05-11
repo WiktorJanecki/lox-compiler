@@ -3,7 +3,7 @@ use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::lox_value::{LoxValue, LoxValueType};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
 use crate::codegen::{State, lox_index_type};
-use inkwell::AddressSpace;
+use inkwell::{AddressSpace, IntPredicate};
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     match stmt {
@@ -42,6 +42,8 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
     let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
+    let true_block = state.ctx.append_basic_block(parent_func, "print.bool");
+    let false_block = state.ctx.append_basic_block(parent_func, "print.bool");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
     let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
 
@@ -63,20 +65,32 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     let nil_literal = global_string_literal(StringLiterals::PrintfNil, state);
     state
         .builder
-        .build_call(printf, &[nil_literal.into()], "printf")
-        .unwrap();
+        .build_call(printf, &[nil_literal.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(bool_block);
 
-    let bool_literal = global_string_literal(StringLiterals::PrintfBool, state);
     let bool_type = state.ctx.bool_type();
     let bool_val = state
         .builder
-        .build_load(bool_type, lox_val.union_ptr, "bool")?;
+        .build_load(bool_type, lox_val.union_ptr, "bool")?
+        .into_int_value();
     state
         .builder
-        .build_call(printf, &[bool_literal.into(), bool_val.into()], "printf")?;
+        .build_conditional_branch(bool_val, true_block, false_block)?;
+
+    state.builder.position_at_end(true_block);
+    let true_literal = global_string_literal(StringLiterals::PrintfTrue, state);
+    state
+        .builder
+        .build_call(printf, &[true_literal.into()], "printf")?;
+    state.builder.build_unconditional_branch(merge_block)?;
+
+    state.builder.position_at_end(false_block);
+    let false_literal = global_string_literal(StringLiterals::PrintfFalse, state);
+    state
+        .builder
+        .build_call(printf, &[false_literal.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(num_block);

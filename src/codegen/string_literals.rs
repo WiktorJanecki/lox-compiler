@@ -8,7 +8,8 @@ pub enum StringLiterals {
     PrintfNumber,
     PrintfString,
     PrintfNil,
-    PrintfBool,
+    PrintfTrue,
+    PrintfFalse,
 
     RePlusMismatchedTypes,
     RePlusUnsupportedType,
@@ -24,8 +25,9 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
     match variant {
         StringLiterals::PrintfNumber => "%f\n",
         StringLiterals::PrintfString => "%s\n",
-        StringLiterals::PrintfNil => "<nil>\n",
-        StringLiterals::PrintfBool => "%d\n",
+        StringLiterals::PrintfNil => "nil\n",
+        StringLiterals::PrintfTrue => "true\n",
+        StringLiterals::PrintfFalse => "false\n",
         StringLiterals::RePlusMismatchedTypes => {
             "Runtime error: Mismatched types used on + operand\n"
         }

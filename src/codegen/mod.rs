@@ -122,7 +122,7 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
     // builder should be at @main.entry
     gen_return_zero(&mut state)?;
 
-    println!("{}", state.module.to_string());
+    // println!("{}", state.module.to_string());
     if let Err(err) = state.module.verify() {
         eprintln!("Błąd weryfikacji IR: {}", err.to_string());
     }

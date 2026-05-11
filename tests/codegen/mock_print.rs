@@ -1,9 +1,10 @@
+use std::fmt::Write;
 use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use loxc::codegen::codegen;
 use loxc::parser::parse;
 use std::cell::RefCell;
-use std::ffi::c_char;
+use std::ffi::{c_char, CStr};
 
 thread_local! {
     /// Theoretically thread-safe, so does not interrupt quick testing
@@ -13,10 +14,22 @@ thread_local! {
 
 /// Mock print linked against our generated llvm to assert program output
 /// Done this way because print is the only possible side effect in lox
-unsafe extern "C" fn mock_printf(_format: *const c_char, val: f64) -> i32 {
+unsafe extern "C" fn mock_printf(format: *const c_char, arg_int: usize, arg_float: f64) -> i32 {
+    // both arguments are captured because of how variadics works
+    // floats go to different registers as ints so even if first argument is float 
+    // arg float will capture it
+    let fmt_str = CStr::from_ptr(format).to_string_lossy();
+
     PRINT_BUFFER.with(|buf| {
-        use std::fmt::Write;
-        write!(buf.borrow_mut(), "{}", val).ok();
+        let mut b = buf.borrow_mut();
+        if fmt_str.contains("%f") {
+            write!(b, "{}", arg_float).ok();
+        } else if fmt_str.contains("%s") {
+            let s = CStr::from_ptr(arg_int as *const c_char).to_string_lossy();
+            write!(b, "{}", s).ok();
+        } else {
+            write!(b, "{}", fmt_str.trim_end_matches('\n')).ok();
+        }
     });
     0
 }
@@ -31,6 +44,22 @@ unsafe extern "C-unwind" fn mock_exit(_code: i32) -> ! {
 /// Run program and assert print statement output. Asserts that program ran without runtime errors
 pub fn assert_output(src: &'static str, should_output: &'static str) -> anyhow::Result<()> {
     PRINT_BUFFER.with(|buf| buf.borrow_mut().clear());
+    assert_eq!(run_with_print(src)?, should_output);
+
+    Ok(())
+}
+pub fn assert_output_f64(src: &'static str, should_output: f64) -> anyhow::Result<()> {
+    PRINT_BUFFER.with(|buf| buf.borrow_mut().clear());
+    let number: f64 = run_with_print(src)?.parse()?;
+
+    let epsilon = 0.0001;
+    // eprintln!("{} {}", number, should_output);
+    assert!((number - should_output).abs() < epsilon );
+    Ok(())
+}
+
+fn run_with_print(src: &'static str) -> anyhow::Result<String> {
+
     let ast = parse(src)?;
     let mut context = Context::create();
     let module = codegen(ast, &mut context)?;
@@ -45,9 +74,8 @@ pub fn assert_output(src: &'static str, should_output: &'static str) -> anyhow::
         let r = engine.run_function_as_main(module.get_function("main").unwrap(), &[]);
         assert_eq!(r, 0);
 
-        let output = PRINT_BUFFER.with(|buf| buf.borrow().clone());
-        assert_eq!(output.trim(), should_output);
-        Ok(())
+        let output = PRINT_BUFFER.with(|buf| buf.borrow().trim().to_string());
+        Ok(output)
     }
 }
 

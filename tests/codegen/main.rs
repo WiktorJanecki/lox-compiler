@@ -1,9 +1,10 @@
 use inkwell::context::Context;
 use loxc::ast::Ast;
 use loxc::codegen::codegen;
-use crate::mock_print::{assert_output, should_runtime_error};
 
 mod mock_print;
+mod expr;
+mod print;
 
 #[test]
 fn empty() -> anyhow::Result<()> {
@@ -23,14 +24,3 @@ fn empty() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-#[test]
-fn expr() -> anyhow::Result<()> {
-    assert_output("print 2+2;", "4")?;
-    assert_output("print 2+2*2;", "6")?;
-    should_runtime_error("print true + true;")?;
-    should_runtime_error("print 2.0 + true;")?;
-
-    Ok(())
-}
-
