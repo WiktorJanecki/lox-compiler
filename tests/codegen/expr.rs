@@ -102,7 +102,6 @@ fn div_err() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[test]
 fn zero_div() -> anyhow::Result<()> {
     assert_output("print 5 / 0;", "inf")?; // lox specification
@@ -128,6 +127,32 @@ fn factors() -> anyhow::Result<()> {
 fn grouping() -> anyhow::Result<()> {
     assert_output_f64("print (1 + 2) * (3 + 4);", (1.0 + 2.0) * (3.0 + 4.0))?;
     assert_output("print(((((true)))));", "true")?;
+
+    Ok(())
+}
+
+#[test]
+fn comparison() -> anyhow::Result<()> {
+    assert_output("print 1 < 2;", "true")?;
+    assert_output("print 1 > 2;", "false")?;
+    assert_output("print 1 >= 1;", "true")?;
+    assert_output("print 1 <= 1;", "true")?;
+
+    Ok(())
+}
+#[test]
+fn comparison_err() -> anyhow::Result<()> {
+    should_runtime_error("print 1 < true;")?;
+    should_runtime_error("print true < 1;")?;
+    should_runtime_error("print true < false;")?;
+
+    should_runtime_error("print 1 <= nil;")?;
+    should_runtime_error("print nil <= 1;")?;
+    should_runtime_error("print nil <= nil;")?;
+
+    should_runtime_error("print 1 > \"t\";")?;
+    should_runtime_error("print \"t\" > 1;")?;
+    should_runtime_error("print \"t\" > \"t\";")?;
 
     Ok(())
 }

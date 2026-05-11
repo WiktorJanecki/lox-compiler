@@ -79,6 +79,15 @@ fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<
     }
 }
 
+fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> {
+    let error_msg = global_string_literal(msg, state);
+    state
+        .builder
+        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
+    state.builder.build_unreachable()?;
+    Ok(())
+}
+
 struct State<'a> {
     ctx: &'a Context,
     module: Module<'a>,

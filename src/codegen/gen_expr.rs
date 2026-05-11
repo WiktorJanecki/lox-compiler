@@ -1,8 +1,10 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, global_string_literal, lox_index_type,
+    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, global_string_literal,
+    lox_index_type,
 };
+use inkwell::{FloatPredicate, IntPredicate};
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
@@ -259,16 +261,104 @@ fn gen_number_binop<'a>(
     Ok(lox_result)
 }
 
+enum Comparisons {
+    Ge,
+    Le,
+    Leq,
+    Geq,
+}
+fn gen_comp<'a>(
+    l: &Node,
+    r: &Node,
+    operator: Comparisons,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    let left = gen_expr(l, ast, state)?;
+    let right = gen_expr(r, ast, state)?;
+
+    let left_tag = state
+        .builder
+        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
+        .into_int_value();
+    let right_tag = state
+        .builder
+        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
+        .into_int_value();
+
+    let parent_func = state
+        .builder
+        .get_insert_block()
+        .unwrap()
+        .get_parent()
+        .unwrap();
+
+    let b_numbers = state.ctx.append_basic_block(parent_func, "numbers");
+    let b_sametypes = state.ctx.append_basic_block(parent_func, "same_types");
+    let b_unsuppoerted = state.ctx.append_basic_block(parent_func, "unsupported");
+
+    let res =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "comp_tags")?;
+    state
+        .builder
+        .build_conditional_branch(res, b_sametypes, b_unsuppoerted)?;
+
+    state.builder.position_at_end(b_sametypes);
+    let comp = state.builder.build_int_compare(
+        IntPredicate::EQ,
+        left_tag,
+        LoxValueType::Number.llvm_int(state.ctx),
+        "r_numbers",
+    )?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_numbers, b_unsuppoerted)?;
+
+    state.builder.position_at_end(b_unsuppoerted);
+    gen_panic_call(StringLiterals::ReComparisonUnsupportedType, state)?;
+
+    state.builder.position_at_end(b_numbers);
+
+    let float_type = state.ctx.f64_type();
+    let left_fval = state
+        .builder
+        .build_load(float_type, left.union_ptr, "left_fval")?
+        .into_float_value();
+    let right_fval = state
+        .builder
+        .build_load(float_type, right.union_ptr, "right_fval")?
+        .into_float_value();
+
+    let pred = match operator {
+        Comparisons::Le => FloatPredicate::OLT,
+        Comparisons::Leq => FloatPredicate::OLE,
+        Comparisons::Ge => FloatPredicate::OGT,
+        Comparisons::Geq => FloatPredicate::OGE,
+    };
+
+    let comp = state
+        .builder
+        .build_float_compare(pred, left_fval, right_fval, "comp")?;
+    let lox_result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+
+    state.builder.build_store(lox_result.union_ptr, comp)?;
+
+    Ok(lox_result)
+}
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {
         Node::Assignment(_, _, _) => todo!(),
         Node::Binary(l, op, r) => match op {
             Operator::Eq => todo!(),
             Operator::Neq => todo!(),
-            Operator::Geq => todo!(),
-            Operator::Leq => todo!(),
-            Operator::Less => todo!(),
-            Operator::Greater => todo!(),
+            Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
+            Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
+            Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
+            Operator::Greater => {
+                gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Ge, ast, state)
+            }
             Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
             Operator::Minus => gen_number_binop(
                 &ast.nodes[*l],

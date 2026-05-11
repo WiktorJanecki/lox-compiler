@@ -16,6 +16,7 @@ pub enum StringLiterals {
     ReMinusUnsupportedType,
     ReMulUnsupportedType,
     ReDivUnsupportedType,
+    ReComparisonUnsupportedType,
 
     #[allow(clippy::upper_case_acronyms)]
     SIZE,
@@ -42,6 +43,9 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
         }
         StringLiterals::ReDivUnsupportedType => {
             "Runtime error: Only Number can be used with / operand\n"
+        }
+        StringLiterals::ReComparisonUnsupportedType => {
+            "Runtime error: Only Numbers can be compared\n"
         }
         StringLiterals::SIZE => unreachable!(),
     }
