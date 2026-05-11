@@ -111,19 +111,10 @@ fn gen_plus<'a>(
     state.builder.build_unreachable()?;
 
     state.builder.position_at_end(mismatched_block);
-    let error_msg = global_string_literal(StringLiterals::RePlusMismatchedTypes, state);
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
+    gen_panic_call(StringLiterals::RePlusMismatchedTypes, state)?;
 
     state.builder.position_at_end(unsupported_block);
-    let error_msg = global_string_literal(StringLiterals::RePlusUnsupportedType, state);
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
-
+    gen_panic_call(StringLiterals::RePlusUnsupportedType, state)?;
     /// NUMBER
     state.builder.position_at_end(num_block);
     // assert both types are number
@@ -222,18 +213,12 @@ fn gen_number_binop<'a>(
         .build_conditional_branch(comp_if_int, merge_block, unsupported_block)?;
 
     state.builder.position_at_end(unsupported_block);
-    let error_msg = global_string_literal(
-        match operator {
-            GenNumberBinopAllowed::Minus => StringLiterals::ReMinusUnsupportedType,
-            GenNumberBinopAllowed::Mul => StringLiterals::ReMulUnsupportedType,
-            GenNumberBinopAllowed::Div => StringLiterals::ReDivUnsupportedType,
-        },
-        state,
-    );
-    state
-        .builder
-        .build_call(state.panic_fn, &[error_msg.into()], "_")?;
-    state.builder.build_unreachable()?;
+    let error = match operator {
+        GenNumberBinopAllowed::Minus => StringLiterals::ReMinusUnsupportedType,
+        GenNumberBinopAllowed::Mul => StringLiterals::ReMulUnsupportedType,
+        GenNumberBinopAllowed::Div => StringLiterals::ReDivUnsupportedType,
+    };
+    gen_panic_call(error, state)?;
     state.builder.position_at_end(merge_block);
 
     let lox_result = gen_alloc_lox_value(LoxValueType::Number, state)?;

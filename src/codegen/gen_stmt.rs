@@ -1,6 +1,6 @@
-use crate::ast::{Ast, Node};
+use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{LoxValue, LoxValueType};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
 use crate::codegen::{State, lox_index_type};
 use inkwell::{AddressSpace, IntPredicate};
@@ -11,7 +11,10 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
             let _ = gen_expr(&ast.nodes[*expr_id], ast, state)?;
             Ok(())
         }
-        Node::IfStmt(_, _, _) => todo!(),
+        Node::IfStmt(expr_id, stmt_id, else_stmt_id) => {
+            let lox_val = gen_expr(&ast.nodes[*expr_id], ast, state)?;
+            gen_if_stmt(&lox_val, stmt_id, else_stmt_id, ast, state)
+        }
         Node::PrintStmt(expr_id) => {
             let lox_val = gen_expr(&ast.nodes[*expr_id], ast, state)?;
             gen_print_stmt(lox_val, state)
@@ -21,6 +24,43 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
         Node::Block(_) => todo!(),
         _ => unreachable!("Stmt node can only have statements -> assured during parsing"),
     }
+}
+
+fn gen_if_stmt<'a>(
+    lox_val: &LoxValue<'a>,
+    if_stmt: &NodeID,
+    else_stmt: &Option<NodeID>,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<()> {
+    let parent_func = state
+        .builder
+        .get_insert_block()
+        .unwrap()
+        .get_parent()
+        .unwrap();
+    let if_true = state.ctx.append_basic_block(parent_func, "if_true");
+    let if_false = state.ctx.append_basic_block(parent_func, "if_false");
+    let after_if = state.ctx.append_basic_block(parent_func, "after_if");
+
+    let truth = gen_truthiness(lox_val, state)?;
+    state
+        .builder
+        .build_conditional_branch(truth, if_true, if_false)?;
+
+    state.builder.position_at_end(if_true);
+    gen_statement(&ast.nodes[*if_stmt], ast, state)?;
+    state.builder.build_unconditional_branch(after_if)?;
+
+    state.builder.position_at_end(if_false);
+    if let Some(else_id) = else_stmt {
+        gen_statement(&ast.nodes[*else_id], ast, state)?;
+    }
+    state.builder.build_unconditional_branch(after_if)?;
+
+    state.builder.position_at_end(after_if);
+
+    Ok(())
 }
 
 fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
@@ -42,8 +82,8 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
     let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
-    let true_block = state.ctx.append_basic_block(parent_func, "print.bool");
-    let false_block = state.ctx.append_basic_block(parent_func, "print.bool");
+    let true_block = state.ctx.append_basic_block(parent_func, "print.bool.true");
+    let false_block = state.ctx.append_basic_block(parent_func, "print.bool.fals");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
     let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
 

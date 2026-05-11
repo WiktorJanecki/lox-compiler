@@ -81,13 +81,13 @@ Stmt: ast::NodeID = {
         ctx.push(Node::WhileStmt(<>,<>))
     },
     <Block>,
-    "if" "(" <e:Expr> ")" <s:Stmt> => {
-        ctx.push(Node::IfStmt(e, s, None))
-    },
-
-    #[precedence(level="1")] #[assoc(side="right")]
+    #[precedence(level="1")]#[assoc(side="right")]
     "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
          ctx.push(Node::IfStmt(e, s1, Some(s2)))
+    },
+    #[precedence(level="2")]#[assoc(side="right")]
+    "if" "(" <e:Expr> ")" <s:Stmt> => {
+        ctx.push(Node::IfStmt(e, s, None))
     },
 };
 

@@ -1,3 +1,4 @@
+use inkwell::types::IntType;
 use crate::codegen::{State, lox_index_type};
 use inkwell::values;
 
@@ -104,4 +105,56 @@ pub fn gen_store_bool<'a>(
         .build_store(var.index_ptr, LoxValueType::Bool.llvm_int(state.ctx))?;
     state.builder.build_store(var.union_ptr, bol)?;
     Ok(())
+}
+
+pub fn gen_truthiness<'a>(lox_val: &LoxValue<'a>, state: &mut State<'a>) -> anyhow::Result<values::IntValue<'a>> {
+
+    let tag_val = state
+        .builder
+        .build_load(lox_index_type(state.ctx), lox_val.index_ptr, "tag")?
+        .into_int_value();
+    let parent_func = state
+        .builder
+        .get_insert_block()
+        .unwrap()
+        .get_parent()
+        .unwrap();
+    let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
+    let true_block = state.ctx.append_basic_block(parent_func, "print.true");
+    let false_block = state.ctx.append_basic_block(parent_func, "print.false");
+    let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
+    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
+
+    let cases = &[
+        (LoxValueType::Nil.llvm_int(state.ctx),false_block),
+        (LoxValueType::Number.llvm_int(state.ctx),true_block),
+        (LoxValueType::Bool.llvm_int(state.ctx), bool_block),
+        (LoxValueType::String.llvm_int(state.ctx),true_block),
+    ];
+    
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+    state.builder.build_switch(tag_val, unreach_block, cases)?;
+    
+    state.builder.position_at_end(unreach_block);
+    state.builder.build_unreachable()?;
+    
+    state.builder.position_at_end(bool_block);
+    let bool_type = state.ctx.bool_type();
+    let bool_val = state.builder.build_load(bool_type, lox_val.union_ptr, "bool_val")?.into_int_value();
+    state.builder.build_store(result.union_ptr, bool_val)?;
+    state.builder.build_unconditional_branch(merge_block)?;
+    
+    state.builder.position_at_end(true_block);
+    state.builder.build_store(result.union_ptr, bool_type.const_int(1, false))?;
+    state.builder.build_unconditional_branch(merge_block)?;
+    
+    state.builder.position_at_end(false_block);
+    state.builder.build_store(result.union_ptr, bool_type.const_zero())?;
+    state.builder.build_unconditional_branch(merge_block)?;
+    
+    state.builder.position_at_end(merge_block);
+    
+    let unwrapped_result = state.builder.build_load(bool_type, result.union_ptr, "result")?;
+    Ok(unwrapped_result.into_int_value())
+    // TODO: function can be rewritten to not use lox value and alloca as result but good enough for now
 }

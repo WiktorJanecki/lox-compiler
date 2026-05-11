@@ -16,12 +16,13 @@ thread_local! {
 /// Done this way because print is the only possible side effect in lox
 unsafe extern "C" fn mock_printf(format: *const c_char, arg_int: usize, arg_float: f64) -> i32 {
     // both arguments are captured because of how variadics works
-    // floats go to different registers as ints so even if first argument is float 
+    // floats go to different registers as ints so even if first argument is float
     // arg float will capture it
     let fmt_str = CStr::from_ptr(format).to_string_lossy();
 
     PRINT_BUFFER.with(|buf| {
         let mut b = buf.borrow_mut();
+        b.clear();
         if fmt_str.contains("%f") {
             write!(b, "{}", arg_float).ok();
         } else if fmt_str.contains("%s") {

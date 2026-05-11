@@ -5,6 +5,7 @@ use loxc::codegen::codegen;
 mod mock_print;
 mod expr;
 mod print;
+mod stmt;
 
 #[test]
 fn empty() -> anyhow::Result<()> {
