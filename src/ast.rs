@@ -26,6 +26,7 @@ impl Ast {
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub enum Operator {
     // Equality
     Eq,  // ==
