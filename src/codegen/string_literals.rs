@@ -54,10 +54,6 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
 pub fn gen_global_string_literals<'a>(
     b: &Builder<'a>,
 ) -> anyhow::Result<[values::PointerValue<'a>; StringLiterals::SIZE as usize]> {
-    let f = |mes: &'static str| {
-        b.build_global_string_ptr(mes, "compiler_printf_literal")
-            .map(|e| e.as_pointer_value())
-    };
     let mut arr = [None; StringLiterals::SIZE as usize];
 
     for i in 0..StringLiterals::SIZE as usize {
