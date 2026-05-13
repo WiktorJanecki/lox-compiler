@@ -12,6 +12,7 @@ use inkwell::types::BasicMetadataTypeEnum::PointerType;
 use inkwell::types::StructType;
 use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
+use std::collections::HashMap;
 
 mod gen_expr;
 mod gen_stmt;
@@ -60,6 +61,7 @@ fn gen_begin_main(state: &mut State) {
         .module
         .add_function("main", state.ctx.i32_type().fn_type(&[], false), None);
     let entry = state.ctx.append_basic_block(main_fn, "entry");
+    state.current_fn = main_fn;
     state.builder.position_at_end(entry);
 }
 
@@ -88,10 +90,14 @@ fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> 
     Ok(())
 }
 
+type VariableStack<'a> = Vec<HashMap<String, LoxValue<'a>>>;
+
 struct State<'a> {
     ctx: &'a Context,
     module: Module<'a>,
     builder: Builder<'a>,
+    current_fn: FunctionValue<'a>,
+    vars: HashMap<String, VariableStack<'a >>, // stores variables for functions
 
     panic_fn: FunctionValue<'a>, // exit with runtime error
     lox_value: StructType<'a>,   // tagged union of all lox types
@@ -117,12 +123,14 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
         ctx: context,
         module,
         builder,
+        current_fn: panic_fn, // temp value
+        vars: HashMap::new(),
         panic_fn,
         lox_value,
         string_literals,
     };
 
-    gen_begin_main(&mut state); // builder at @main.entry
+    gen_begin_main(&mut state); // builder at @main.entry, current_fn at main
 
     for decl_id in ast.program.clone() {
         let decl = ast.nodes.get(decl_id).unwrap();

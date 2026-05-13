@@ -142,3 +142,9 @@ fn parse_call() {
     parse_ok("a = method.member;");
     parse_ok("method.member = 5;");
 }
+
+#[test]
+fn parse_comments() {
+    parse_ok("expr; // comment");
+    parse_ok("// comment");
+}

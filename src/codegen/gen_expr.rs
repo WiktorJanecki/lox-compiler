@@ -1,8 +1,7 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
 use crate::codegen::{
-    gen_panic_call, lox_index_type, LoxValue, LoxValueType, State,
-    StringLiterals,
+    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
 
@@ -60,12 +59,7 @@ fn gen_plus<'a>(
         .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
         .into_int_value();
 
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
+    let parent_func = state.current_fn;
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
@@ -177,12 +171,7 @@ fn gen_number_binop<'a>(
         .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
         .into_int_value();
 
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
+    let parent_func = state.current_fn;
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
     let unsupported_block = state
         .ctx
@@ -272,13 +261,7 @@ fn gen_comp<'a>(
         .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
         .into_int_value();
 
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
-
+    let parent_func = state.current_fn;
     let b_numbers = state.ctx.append_basic_block(parent_func, "numbers");
     let b_sametypes = state.ctx.append_basic_block(parent_func, "same_types");
     let b_unsuppoerted = state.ctx.append_basic_block(parent_func, "unsupported");

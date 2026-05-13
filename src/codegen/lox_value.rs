@@ -112,12 +112,7 @@ pub fn gen_truthiness<'a>(lox_val: &LoxValue<'a>, state: &mut State<'a>) -> anyh
         .builder
         .build_load(lox_index_type(state.ctx), lox_val.index_ptr, "tag")?
         .into_int_value();
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
+    let parent_func = state.current_fn;
     let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
     let true_block = state.ctx.append_basic_block(parent_func, "print.true");
     let false_block = state.ctx.append_basic_block(parent_func, "print.false");

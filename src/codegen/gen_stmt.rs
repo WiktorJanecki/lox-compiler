@@ -72,12 +72,7 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
         .builder
         .build_load(lox_index_type(state.ctx), lox_val.index_ptr, "tag")?
         .into_int_value();
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
+    let parent_func = state.current_fn;
     let nil_block = state.ctx.append_basic_block(parent_func, "print.nil");
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
