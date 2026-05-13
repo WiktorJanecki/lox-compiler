@@ -2,6 +2,7 @@ use crate::cli::EmittingType;
 use clap::Parser;
 use inkwell::OptimizationLevel;
 use inkwell::context::Context;
+use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use loxc::*;
 use std::process::Command;
@@ -13,6 +14,32 @@ fn main() -> anyhow::Result<()> {
     let mut ctx = Context::create();
     let module = codegen::codegen(ast, &mut ctx)?;
 
+    // run optimization pases
+    Target::initialize_all(&InitializationConfig::default());
+    let triple = TargetMachine::get_default_triple();
+    module.set_triple(&triple);
+
+    let target = Target::from_triple(&triple)?;
+    let opt_level = if args.optimize {
+        OptimizationLevel::Aggressive
+    } else {
+        OptimizationLevel::None
+    };
+    let target_machine = target
+        .create_target_machine(
+            &triple,
+            "generic",
+            "",
+            opt_level,
+            RelocMode::PIC,
+            CodeModel::Default,
+        )
+        .ok_or_else(|| anyhow::anyhow!("Could not create target machine"))?;
+    let pbo = PassBuilderOptions::create();
+    if args.optimize {
+        module.run_passes("default<O3>", &target_machine, pbo)?;
+    }
+
     // EMITTING LLVM: UNIVERSITY ASSIGNMENT ENDS HERE
     if matches!(args.emit, EmittingType::LlvmIr) {
         std::fs::write(args.output_filename(), module.to_string())?;
@@ -20,22 +47,6 @@ fn main() -> anyhow::Result<()> {
     }
 
     // rest is just helper for us to test compiler
-    Target::initialize_all(&InitializationConfig::default());
-    let triple = TargetMachine::get_default_triple();
-    module.set_triple(&triple);
-
-    let target = Target::from_triple(&triple)?;
-    let target_machine = target
-        .create_target_machine(
-            &triple,
-            "generic",
-            "",
-            OptimizationLevel::Default,
-            RelocMode::PIC,
-            CodeModel::Default,
-        )
-        .ok_or_else(|| anyhow::anyhow!("Could not create target machine"))?;
-
     if matches!(args.emit, EmittingType::Obj) {
         target_machine.write_to_file(
             &module,
