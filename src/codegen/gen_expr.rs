@@ -1,32 +1,42 @@
 use crate::ast::{Ast, Node, Operator};
-use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
+use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number, gen_unpack_lox_value};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, get_current_env, lox_index_type,
+    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, get_current_env,
+    get_var_from_env, lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
+    let union = state
+        .builder
+        .build_struct_gep(state.lox_value, lox.ptr, 1, "union")?;
     let str_global_ptr = state
         .builder
         .build_global_string_ptr(val, "cstr")?
         .as_pointer_value();
-    state.builder.build_store(lox.union_ptr, str_global_ptr)?;
+    state.builder.build_store(union, str_global_ptr)?;
 
     Ok(lox)
 }
 fn gen_number<'a>(number: f64, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::Number, state)?;
+    let union = state
+        .builder
+        .build_struct_gep(state.lox_value, lox.ptr, 1, "union")?;
     state
         .builder
-        .build_store(lox.union_ptr, state.ctx.f64_type().const_float(number))?;
+        .build_store(union, state.ctx.f64_type().const_float(number))?;
 
     Ok(lox)
 }
 fn gen_bool<'a>(val: bool, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+    let union = state
+        .builder
+        .build_struct_gep(state.lox_value, lox.ptr, 1, "union")?;
     state.builder.build_store(
-        lox.union_ptr,
+        union,
         state
             .ctx
             .bool_type()
@@ -50,14 +60,8 @@ fn gen_plus<'a>(
     let left = gen_expr(l, ast, state)?;
     let right = gen_expr(r, ast, state)?;
 
-    let left_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
-        .into_int_value();
-    let right_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
-        .into_int_value();
+    let (left_tag_val, left_union) = gen_unpack_lox_value(&left, state)?;
+    let (right_tag_val, right_union) = gen_unpack_lox_value(&right, state)?;
 
     let parent_func = state.current_fn;
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
@@ -73,7 +77,7 @@ fn gen_plus<'a>(
 
     // Compare types -> if mismatched panic
     let comp = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
+        IntPredicate::EQ,
         left_tag_val,
         right_tag_val,
         "comp_tags",
@@ -117,11 +121,11 @@ fn gen_plus<'a>(
     let float_t = state.ctx.f64_type();
     let left_fval = state
         .builder
-        .build_load(float_t, left.union_ptr, "left_fval")?
+        .build_load(float_t, left_union, "left_fval")?
         .into_float_value();
     let right_fval = state
         .builder
-        .build_load(float_t, right.union_ptr, "right_fval")?
+        .build_load(float_t, right_union, "right_fval")?
         .into_float_value();
     let sum_fval = state
         .builder
@@ -162,14 +166,8 @@ fn gen_number_binop<'a>(
     let left = gen_expr(l, ast, state)?;
     let right = gen_expr(r, ast, state)?;
 
-    let left_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
-        .into_int_value();
-    let right_tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
-        .into_int_value();
+    let (left_tag_val, left_union) = gen_unpack_lox_value(&left, state)?;
+    let (right_tag_val, right_union) = gen_unpack_lox_value(&right, state)?;
 
     let parent_func = state.current_fn;
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
@@ -179,7 +177,7 @@ fn gen_number_binop<'a>(
 
     // Compare types -> if mismatched panic
     let comp = state.builder.build_int_compare(
-        inkwell::IntPredicate::EQ,
+        IntPredicate::EQ,
         left_tag_val,
         right_tag_val,
         "comp_tags",
@@ -215,11 +213,11 @@ fn gen_number_binop<'a>(
     let float_t = state.ctx.f64_type();
     let left_fval = state
         .builder
-        .build_load(float_t, left.union_ptr, "left_fval")?
+        .build_load(float_t, left_union, "left_fval")?
         .into_float_value();
     let right_fval = state
         .builder
-        .build_load(float_t, right.union_ptr, "right_fval")?
+        .build_load(float_t, right_union, "right_fval")?
         .into_float_value();
     let result_fval = match operator {
         GenNumberBinopAllowed::Minus => state
@@ -252,14 +250,8 @@ fn gen_comp<'a>(
     let left = gen_expr(l, ast, state)?;
     let right = gen_expr(r, ast, state)?;
 
-    let left_tag = state
-        .builder
-        .build_load(lox_index_type(state.ctx), left.index_ptr, "left_tag")?
-        .into_int_value();
-    let right_tag = state
-        .builder
-        .build_load(lox_index_type(state.ctx), right.index_ptr, "right_tag")?
-        .into_int_value();
+    let (left_tag, left_union) = gen_unpack_lox_value(&left, state)?;
+    let (right_tag, right_union) = gen_unpack_lox_value(&right, state)?;
 
     let parent_func = state.current_fn;
     let b_numbers = state.ctx.append_basic_block(parent_func, "numbers");
@@ -293,11 +285,11 @@ fn gen_comp<'a>(
     let float_type = state.ctx.f64_type();
     let left_fval = state
         .builder
-        .build_load(float_type, left.union_ptr, "left_fval")?
+        .build_load(float_type, left_union, "left_fval")?
         .into_float_value();
     let right_fval = state
         .builder
-        .build_load(float_type, right.union_ptr, "right_fval")?
+        .build_load(float_type, right_union, "right_fval")?
         .into_float_value();
 
     let pred = match operator {
@@ -311,14 +303,32 @@ fn gen_comp<'a>(
         .builder
         .build_float_compare(pred, left_fval, right_fval, "comp")?;
     let lox_result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+    let result_union =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, lox_result.ptr, 1, "result_union")?;
 
-    state.builder.build_store(lox_result.union_ptr, comp)?;
+    state.builder.build_store(result_union, comp)?;
 
     Ok(lox_result)
 }
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {
-        Node::Assignment(_, _, _) => todo!(),
+        Node::Assignment(_call, lhs, rhs) => {
+            // TODO: what to do with call
+            let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
+            let struct_type = state.lox_value;
+            let block = state.builder.get_insert_block().unwrap();;
+            let builder = state.ctx.create_builder();
+            builder.position_at_end(block);
+            let found = get_var_from_env(lhs, state)?;
+
+            // copy from right to found
+            let src = builder.build_load(struct_type, right.ptr, "rhs_expr" )?;
+            builder.build_store(found.ptr, src)?;
+
+            Ok(right)
+        }
         Node::Binary(l, op, r) => match op {
             Operator::Eq => todo!(),
             Operator::Neq => todo!(),
@@ -356,13 +366,7 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
         },
         Node::Unary(_, _) => todo!(),
         Node::Call => todo!(),
-        Node::Identifier(id) => {
-            let env = get_current_env(state);
-            if let Some(var) = env.get(id) {
-                return Ok(var.clone());
-            }
-            anyhow::bail!(format!("Usage of undeclared variable: {}", id))
-        }
+        Node::Identifier(id) => get_var_from_env(id, state).cloned(),
         Node::Super(_) => todo!(),
         Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
         Node::Number(n) => gen_number(*n, state),

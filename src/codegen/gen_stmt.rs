@@ -1,8 +1,8 @@
 use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{gen_truthiness, LoxValue, LoxValueType};
-use crate::codegen::string_literals::{global_string_literal, StringLiterals};
-use crate::codegen::{lox_index_type, State};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value};
+use crate::codegen::string_literals::{StringLiterals, global_string_literal};
+use crate::codegen::{State, lox_index_type};
 use inkwell::AddressSpace;
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
@@ -33,12 +33,7 @@ fn gen_if_stmt<'a>(
     ast: &Ast,
     state: &mut State<'a>,
 ) -> anyhow::Result<()> {
-    let parent_func = state
-        .builder
-        .get_insert_block()
-        .unwrap()
-        .get_parent()
-        .unwrap();
+    let parent_func = state.current_fn;
     let if_true = state.ctx.append_basic_block(parent_func, "if_true");
     let if_false = state.ctx.append_basic_block(parent_func, "if_false");
     let after_if = state.ctx.append_basic_block(parent_func, "after_if");
@@ -63,15 +58,12 @@ fn gen_if_stmt<'a>(
     Ok(())
 }
 
-fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
+fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::Result<()> {
     let printf = state
         .module
         .get_function("printf")
         .expect("used after gen_extern_functions");
-    let tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), lox_val.index_ptr, "tag")?
-        .into_int_value();
+    let (tag_val, union_ptr) = gen_unpack_lox_value(&lox_val, state)?;
     let parent_func = state.current_fn;
     let nil_block = state.ctx.append_basic_block(parent_func, "print.nil");
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
@@ -108,7 +100,7 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     let bool_type = state.ctx.bool_type();
     let bool_val = state
         .builder
-        .build_load(bool_type, lox_val.union_ptr, "bool")?
+        .build_load(bool_type, union_ptr, "bool")?
         .into_int_value();
     state
         .builder
@@ -131,9 +123,7 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     state.builder.position_at_end(num_block);
     let float_literal = global_string_literal(StringLiterals::PrintfNumber, state);
     let float_type = state.ctx.f64_type();
-    let float_val = state
-        .builder
-        .build_load(float_type, lox_val.union_ptr, "float")?;
+    let float_val = state.builder.build_load(float_type, union_ptr, "float")?;
     state
         .builder
         .build_call(printf, &[float_literal.into(), float_val.into()], "printf")?;
@@ -142,9 +132,7 @@ fn gen_print_stmt(lox_val: LoxValue, state: &mut State) -> anyhow::Result<()> {
     state.builder.position_at_end(str_block);
     let str_literal = global_string_literal(StringLiterals::PrintfString, state);
     let str_type = state.ctx.ptr_type(AddressSpace::default());
-    let str_val = state
-        .builder
-        .build_load(str_type, lox_val.union_ptr, "str_val")?;
+    let str_val = state.builder.build_load(str_type, union_ptr, "str_val")?;
     state
         .builder
         .build_call(printf, &[str_literal.into(), str_val.into()], "printf")?;

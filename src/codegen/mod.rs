@@ -86,6 +86,19 @@ fn get_current_env<'a, 'b>(state: &'b mut State<'a>) -> &'b mut HashMap<String, 
     state.vars.get_mut(fn_name).unwrap().last_mut().unwrap()
 }
 
+fn get_var_from_env<'a,'b >(name: &str, state: &'b mut State<'a>) -> anyhow::Result<&'b mut LoxValue<'a>>{
+    let err = format!("Usage of undeclared variable `{}`", name);
+    let stack = state.vars.get_mut(state.current_fn.get_name()).unwrap();
+    
+    for hm in stack.iter_mut().rev(){
+        if hm.contains_key(name) {
+            return Ok(hm.get_mut(name).unwrap());
+        }
+    }
+    
+    anyhow::bail!(err);
+}
+
 fn gen_var_decl(id: &str, rval: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     let lox_value = gen_expr(rval, ast, state)?;
     get_current_env(state).insert(id.to_owned(), lox_value); // if exist overwrites correctly

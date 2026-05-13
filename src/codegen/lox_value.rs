@@ -25,8 +25,6 @@ impl LoxValueType {
 #[derive(Clone)]
 pub struct LoxValue<'a> {
     pub ptr: values::PointerValue<'a>,
-    pub union_ptr: values::PointerValue<'a>,
-    pub index_ptr: values::PointerValue<'a>,
 }
 
 pub fn gen_unpack_lox_value<'a>(
@@ -57,18 +55,10 @@ pub fn gen_alloc_lox_value<'a>(
     let index_ptr = state
         .builder
         .build_struct_gep(state.lox_value, ptr, 0, "index")?;
-    let union_ptr = state
-        .builder
-        .build_struct_gep(state.lox_value, ptr, 1, "union")?;
-
     state
         .builder
         .build_store(index_ptr, typee.llvm_int(state.ctx))?;
-    Ok(LoxValue {
-        ptr,
-        union_ptr,
-        index_ptr,
-    })
+    Ok(LoxValue { ptr })
 }
 
 pub fn gen_store_number<'a>(
@@ -76,10 +66,16 @@ pub fn gen_store_number<'a>(
     num: values::FloatValue<'a>,
     state: &mut State<'a>,
 ) -> anyhow::Result<()> {
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 0, "index_ptr")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 1, "union_ptr")?;
     state
         .builder
-        .build_store(var.index_ptr, LoxValueType::Number.llvm_int(state.ctx))?;
-    state.builder.build_store(var.union_ptr, num)?;
+        .build_store(index_ptr, LoxValueType::Number.llvm_int(state.ctx))?;
+    state.builder.build_store(union_ptr, num)?;
     Ok(())
 }
 
@@ -88,10 +84,16 @@ pub fn gen_store_string<'a>(
     cstr: values::PointerValue<'a>,
     state: &mut State<'a>,
 ) -> anyhow::Result<()> {
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 0, "index_ptr")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 1, "union_ptr")?;
     state
         .builder
-        .build_store(var.index_ptr, LoxValueType::String.llvm_int(state.ctx))?;
-    state.builder.build_store(var.union_ptr, cstr)?;
+        .build_store(index_ptr, LoxValueType::String.llvm_int(state.ctx))?;
+    state.builder.build_store(union_ptr, cstr)?;
     Ok(())
 }
 
@@ -100,19 +102,24 @@ pub fn gen_store_bool<'a>(
     bol: values::IntValue<'a>,
     state: &mut State<'a>,
 ) -> anyhow::Result<()> {
+    let index_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 0, "index_ptr")?;
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, var.ptr, 1, "union_ptr")?;
     state
         .builder
-        .build_store(var.index_ptr, LoxValueType::Bool.llvm_int(state.ctx))?;
-    state.builder.build_store(var.union_ptr, bol)?;
+        .build_store(index_ptr, LoxValueType::Bool.llvm_int(state.ctx))?;
+    state.builder.build_store(union_ptr, bol)?;
     Ok(())
 }
 
-pub fn gen_truthiness<'a>(lox_val: &LoxValue<'a>, state: &mut State<'a>) -> anyhow::Result<values::IntValue<'a>> {
-
-    let tag_val = state
-        .builder
-        .build_load(lox_index_type(state.ctx), lox_val.index_ptr, "tag")?
-        .into_int_value();
+pub fn gen_truthiness<'a>(
+    lox_val: &LoxValue<'a>,
+    state: &mut State<'a>,
+) -> anyhow::Result<values::IntValue<'a>> {
+    let (tag_val, union_ptr) = gen_unpack_lox_value(lox_val, state)?;
     let parent_func = state.current_fn;
     let bool_block = state.ctx.append_basic_block(parent_func, "print.bool");
     let true_block = state.ctx.append_basic_block(parent_func, "print.true");
@@ -121,35 +128,66 @@ pub fn gen_truthiness<'a>(lox_val: &LoxValue<'a>, state: &mut State<'a>) -> anyh
     let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
 
     let cases = &[
-        (LoxValueType::Nil.llvm_int(state.ctx),false_block),
-        (LoxValueType::Number.llvm_int(state.ctx),true_block),
+        (LoxValueType::Nil.llvm_int(state.ctx), false_block),
+        (LoxValueType::Number.llvm_int(state.ctx), true_block),
         (LoxValueType::Bool.llvm_int(state.ctx), bool_block),
-        (LoxValueType::String.llvm_int(state.ctx),true_block),
+        (LoxValueType::String.llvm_int(state.ctx), true_block),
     ];
-    
+
+    let bool_type = state.ctx.bool_type();
     let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
     state.builder.build_switch(tag_val, unreach_block, cases)?;
-    
+
     state.builder.position_at_end(unreach_block);
     state.builder.build_unreachable()?;
-    
-    state.builder.position_at_end(bool_block);
-    let bool_type = state.ctx.bool_type();
-    let bool_val = state.builder.build_load(bool_type, lox_val.union_ptr, "bool_val")?.into_int_value();
-    state.builder.build_store(result.union_ptr, bool_val)?;
-    state.builder.build_unconditional_branch(merge_block)?;
-    
-    state.builder.position_at_end(true_block);
-    state.builder.build_store(result.union_ptr, bool_type.const_int(1, false))?;
-    state.builder.build_unconditional_branch(merge_block)?;
-    
-    state.builder.position_at_end(false_block);
-    state.builder.build_store(result.union_ptr, bool_type.const_zero())?;
-    state.builder.build_unconditional_branch(merge_block)?;
-    
+
+    {
+        state.builder.position_at_end(bool_block);
+        let result_union_ptr =
+            state
+                .builder
+                .build_struct_gep(state.lox_value, result.ptr, 1, "result_union_ptr")?;
+        let bool_val = state
+            .builder
+            .build_load(bool_type, union_ptr, "bool_val")?
+            .into_int_value();
+        state.builder.build_store(result_union_ptr, bool_val)?;
+        state.builder.build_unconditional_branch(merge_block)?;
+    }
+
+    {
+        state.builder.position_at_end(true_block);
+        let result_union_ptr =
+            state
+                .builder
+                .build_struct_gep(state.lox_value, result.ptr, 1, "result_union_ptr")?;
+        state
+            .builder
+            .build_store(result_union_ptr, bool_type.const_int(1, false))?;
+        state.builder.build_unconditional_branch(merge_block)?;
+    }
+
+    {
+        state.builder.position_at_end(false_block);
+        let result_union_ptr =
+            state
+                .builder
+                .build_struct_gep(state.lox_value, result.ptr, 1, "result_union_ptr")?;
+        state
+            .builder
+            .build_store(result_union_ptr, bool_type.const_zero())?;
+        state.builder.build_unconditional_branch(merge_block)?;
+    }
+
     state.builder.position_at_end(merge_block);
-    
-    let unwrapped_result = state.builder.build_load(bool_type, result.union_ptr, "result")?;
+
+    let result_union_ptr =
+        state
+            .builder
+            .build_struct_gep(state.lox_value, result.ptr, 1, "result_union_ptr")?;
+    let unwrapped_result = state
+        .builder
+        .build_load(bool_type, result_union_ptr, "result")?;
     Ok(unwrapped_result.into_int_value())
     // TODO: function can be rewritten to not use lox value and alloca as result but good enough for now
 }
