@@ -22,6 +22,7 @@ impl LoxValueType {
 }
 
 /// LLVM representation of dynamic typed variable. This should be used to do all expressions instead of pure llvm types
+#[derive(Clone)]
 pub struct LoxValue<'a> {
     pub ptr: values::PointerValue<'a>,
     pub union_ptr: values::PointerValue<'a>,

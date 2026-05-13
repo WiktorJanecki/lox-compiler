@@ -1,7 +1,7 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, lox_index_type,
+    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, get_current_env, lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
 
@@ -356,7 +356,13 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
         },
         Node::Unary(_, _) => todo!(),
         Node::Call => todo!(),
-        Node::Identifier(_) => todo!(),
+        Node::Identifier(id) => {
+            let env = get_current_env(state);
+            if let Some(var) = env.get(id) {
+                return Ok(var.clone());
+            }
+            anyhow::bail!(format!("Usage of undeclared variable: {}", id))
+        }
         Node::Super(_) => todo!(),
         Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
         Node::Number(n) => gen_number(*n, state),

@@ -1,5 +1,6 @@
 use crate::ast;
 use crate::ast::{Ast, Node};
+use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::gen_stmt::gen_statement;
 use crate::codegen::lox_value::{LoxValue, LoxValueType};
 use crate::codegen::string_literals::{
@@ -13,6 +14,7 @@ use inkwell::types::StructType;
 use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
 use std::collections::HashMap;
+use std::ffi::CString;
 
 mod gen_expr;
 mod gen_stmt;
@@ -71,9 +73,28 @@ fn gen_return_zero(state: &mut State) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn get_current_env<'a, 'b>(state: &'b mut State<'a>) -> &'b mut HashMap<String, LoxValue<'a>> {
+    let fn_name = state.current_fn.get_name();
+    if state.vars.contains_key(fn_name) {
+        let stack = state.vars.get_mut(fn_name).unwrap();
+        if stack.is_empty() {
+            stack.push(HashMap::new());
+        }
+        return stack.last_mut().unwrap();
+    }
+    state.vars.insert(fn_name.to_owned(), vec![HashMap::new()]);
+    state.vars.get_mut(fn_name).unwrap().last_mut().unwrap()
+}
+
+fn gen_var_decl(id: &str, rval: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
+    let lox_value = gen_expr(rval, ast, state)?;
+    get_current_env(state).insert(id.to_owned(), lox_value); // if exist overwrites correctly
+    Ok(())
+}
+
 fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     match decl {
-        Node::VarDecl(_, _) => todo!(),
+        Node::VarDecl(id, expr_id) => gen_var_decl(id, &ast.nodes[*expr_id], ast, state),
         Node::ClassDecl(_, _, _) => todo!(),
         Node::FunDecl(_, _, _) => todo!(),
         Node::Stmt(stmt_id) => gen_statement(&ast.nodes[*stmt_id], ast, state),
@@ -97,7 +118,7 @@ struct State<'a> {
     module: Module<'a>,
     builder: Builder<'a>,
     current_fn: FunctionValue<'a>,
-    vars: HashMap<String, VariableStack<'a >>, // stores variables for functions
+    vars: HashMap<CString, VariableStack<'a>>, // stores variables for functions
 
     panic_fn: FunctionValue<'a>, // exit with runtime error
     lox_value: StructType<'a>,   // tagged union of all lox types

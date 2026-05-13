@@ -17,6 +17,7 @@ pub enum StringLiterals {
     ReMulUnsupportedType,
     ReDivUnsupportedType,
     ReComparisonUnsupportedType,
+    ReUndeclaredVariable,
 
     #[allow(clippy::upper_case_acronyms)]
     SIZE,
@@ -47,6 +48,7 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
         StringLiterals::ReComparisonUnsupportedType => {
             "Runtime error: Only Numbers can be compared\n"
         }
+        StringLiterals::ReUndeclaredVariable => "Runtime error: Usage of undeclared variable\n",
         StringLiterals::SIZE => unreachable!(),
     }
 }
