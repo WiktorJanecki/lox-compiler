@@ -3,6 +3,11 @@ use crate::ast;
 use crate::ast::{Node, Operator};
 
 grammar<'a>(ctx: &'a mut ast::Ast);
+match {
+    r"\s*" => { },               // ignore ws
+    r"//[^\n\r]*[\n\r]*" => { }, // ignore comments
+    _                            // pass rest
+}
 
 pub Program: () = {
     <ds:Declaration*> => {

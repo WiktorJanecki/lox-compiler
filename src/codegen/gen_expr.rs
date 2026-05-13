@@ -1,8 +1,8 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, global_string_literal,
-    lox_index_type,
+    gen_panic_call, lox_index_type, LoxValue, LoxValueType, State,
+    StringLiterals,
 };
 use inkwell::{FloatPredicate, IntPredicate};
 
@@ -115,7 +115,8 @@ fn gen_plus<'a>(
 
     state.builder.position_at_end(unsupported_block);
     gen_panic_call(StringLiterals::RePlusUnsupportedType, state)?;
-    /// NUMBER
+
+    // NUMBER
     state.builder.position_at_end(num_block);
     // assert both types are number
 

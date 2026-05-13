@@ -1,9 +1,9 @@
 use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness};
-use crate::codegen::string_literals::{StringLiterals, global_string_literal};
-use crate::codegen::{State, lox_index_type};
-use inkwell::{AddressSpace, IntPredicate};
+use crate::codegen::lox_value::{gen_truthiness, LoxValue, LoxValueType};
+use crate::codegen::string_literals::{global_string_literal, StringLiterals};
+use crate::codegen::{lox_index_type, State};
+use inkwell::AddressSpace;
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     match stmt {

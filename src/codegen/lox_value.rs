@@ -1,4 +1,3 @@
-use inkwell::types::IntType;
 use crate::codegen::{State, lox_index_type};
 use inkwell::values;
 
