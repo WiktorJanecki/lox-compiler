@@ -2,7 +2,7 @@ use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
-use crate::codegen::{State, lox_index_type};
+use crate::codegen::{State, lox_index_type, get_current_env, push_new_env, pop_env, gen_declaration};
 use inkwell::AddressSpace;
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
@@ -21,7 +21,15 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
         }
         Node::ReturnStmt(_) => todo!(),
         Node::WhileStmt(_, _) => todo!(),
-        Node::Block(_) => todo!(),
+        Node::Block(decls) => {
+            push_new_env(state)?;
+            for decl in decls{
+                gen_declaration(&ast.nodes[*decl], ast, state)?;
+            }
+            pop_env(state)?;
+
+            Ok(())
+        },
         _ => unreachable!("Stmt node can only have statements -> assured during parsing"),
     }
 }

@@ -86,7 +86,22 @@ fn get_current_env<'a, 'b>(state: &'b mut State<'a>) -> &'b mut HashMap<String, 
     state.vars.get_mut(fn_name).unwrap().last_mut().unwrap()
 }
 
-fn get_var_from_env<'a,'b >(name: &str, state: &'b mut State<'a>) -> anyhow::Result<&'b mut LoxValue<'a>>{
+fn pop_env(state: &mut State) -> anyhow::Result<()> {
+    let fn_name = state.current_fn.get_name();
+    state.vars.get_mut(fn_name).unwrap().pop();
+    Ok(())
+}
+
+fn push_new_env(state: &mut State) -> anyhow::Result<()> {
+    let fn_name = state.current_fn.get_name();
+    state.vars.get_mut(fn_name).unwrap().push(HashMap::new());
+    Ok(())
+}
+
+fn get_var_from_env<'a, 'b>(
+    name: &str,
+    state: &'b mut State<'a>,
+) -> anyhow::Result<&'b mut LoxValue<'a>> {
     let err = format!("Usage of undeclared variable `{}`", name);
     let stack = state.vars.get_mut(state.current_fn.get_name()).unwrap();
     
@@ -95,7 +110,7 @@ fn get_var_from_env<'a,'b >(name: &str, state: &'b mut State<'a>) -> anyhow::Res
             return Ok(hm.get_mut(name).unwrap());
         }
     }
-    
+
     anyhow::bail!(err);
 }
 

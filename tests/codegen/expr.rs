@@ -156,3 +156,15 @@ fn comparison_err() -> anyhow::Result<()> {
 
     Ok(())
 }
+#[test]
+fn assigment() -> anyhow::Result<()> {
+    assert_output_f64("var a = 5; print a = 6;",6.)?;
+    assert_output_f64("
+        var a;
+        var b;
+        var c;
+        a = b = c = 2;
+        print a + b + c;
+    ",6.0)?;
+    Ok(())
+}

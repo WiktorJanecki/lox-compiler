@@ -1,4 +1,4 @@
-use crate::mock_print::assert_output;
+use crate::mock_print::{assert_output, assert_output_f64};
 
 #[test]
 fn if_true() -> anyhow::Result<()> {
@@ -66,6 +66,30 @@ fn dangling_if() -> anyhow::Result<()> {
                print \"ma\";
         ",
         "ba",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn var_decl() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a = 5;
+            print a;
+        ",
+        5.0,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn var_default() -> anyhow::Result<()> {
+    assert_output(
+        "
+            var a;
+            print a;
+        ",
+        "nil",
     )?;
     Ok(())
 }
