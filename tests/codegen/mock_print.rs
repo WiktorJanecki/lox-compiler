@@ -89,7 +89,11 @@ pub fn should_runtime_error(src: &'static str) -> anyhow::Result<()> {
     let module = codegen(ast, &mut context)?;
 
     let engine = module.create_jit_execution_engine(OptimizationLevel::None)?;
+    let printf_fn = module
+        .get_function("printf")
+        .ok_or_else(|| anyhow::anyhow!("printf not declared in module"))?;
     let exit_fn = module.get_function("exit").unwrap();
+    engine.add_global_mapping(&printf_fn, mock_printf as usize);
     engine.add_global_mapping(&exit_fn, mock_exit as usize);
 
     unsafe {

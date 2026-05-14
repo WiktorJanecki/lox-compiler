@@ -1,4 +1,4 @@
-use crate::mock_print::{assert_output, assert_output_f64};
+use crate::mock_print::{assert_output, assert_output_f64, should_runtime_error};
 
 #[test]
 fn if_true() -> anyhow::Result<()> {
@@ -91,5 +91,106 @@ fn var_default() -> anyhow::Result<()> {
         ",
         "nil",
     )?;
+    Ok(())
+}
+
+#[test]
+fn var_undeclared() {
+    // should compile time err
+    assert!(should_runtime_error("print a;").is_err());
+}
+
+#[test]
+fn block_shadow() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                var a = 6;
+                print a;        
+            }
+        ",
+        6.0,
+    )?;
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                var a = 6;
+            }
+            print a;        
+        ",
+        5.0,
+    )?;
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                print a;        
+                var a = 6;
+            }
+        ",
+        5.0,
+    )?;
+    assert_output_f64(
+        "
+            var a = 5;
+            print a;        
+            {
+                var a = 6;
+            }
+        ",
+        5.0,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn block_search_up() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                var b = 3;
+                print a;
+            }
+        ",
+        5.0,
+    )?;
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                var b = 3;
+                print b;
+            }
+        ",
+        3.0,
+    )?;
+
+    assert_output_f64(
+        "
+            var a = 5;
+            {
+                var b = 3;
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+
+    // should compile time err
+    assert!(
+        should_runtime_error(
+            "
+            var a = 5;
+            {
+                var b = 3;
+            }
+            print b;
+        ",
+        )
+        .is_err()
+    );
     Ok(())
 }
