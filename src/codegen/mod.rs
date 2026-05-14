@@ -64,6 +64,7 @@ fn gen_begin_main(state: &mut State) {
         .add_function("main", state.ctx.i32_type().fn_type(&[], false), None);
     let entry = state.ctx.append_basic_block(main_fn, "entry");
     state.current_fn = main_fn;
+    state.vars.insert(main_fn.get_name().to_owned(), vec![HashMap::new()]);
     state.builder.position_at_end(entry);
 }
 
@@ -75,6 +76,7 @@ fn gen_return_zero(state: &mut State) -> anyhow::Result<()> {
 
 fn get_current_env<'a, 'b>(state: &'b mut State<'a>) -> &'b mut HashMap<String, LoxValue<'a>> {
     let fn_name = state.current_fn.get_name();
+    // TODO: don't check but require env created
     if state.vars.contains_key(fn_name) {
         let stack = state.vars.get_mut(fn_name).unwrap();
         if stack.is_empty() {
