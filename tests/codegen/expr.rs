@@ -211,3 +211,15 @@ fn negation() -> anyhow::Result<()> {
     should_runtime_error("print !\"dfasoij\";")?;
     Ok(())
 }
+
+#[test]
+fn unary_minus() -> anyhow::Result<()> {
+    assert_output_f64("print -5;", -5.0)?;
+    assert_output_f64("print ---5;", -5.0)?;
+
+    should_runtime_error("print -true;")?;
+    should_runtime_error("print -nil;")?;
+    should_runtime_error("print -\"fdsaf\";")?;
+
+    Ok(())
+}

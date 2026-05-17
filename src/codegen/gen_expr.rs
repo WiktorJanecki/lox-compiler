@@ -346,6 +346,37 @@ fn gen_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<
     Ok(result)
 }
 
+
+fn gen_num_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
+    let val = gen_expr(node, ast, state)?;
+    let (tag, union_ptr) = gen_unpack_lox_value(&val, state)?;
+
+    let b_num = gen_block("num", state);
+    let b_nnum = gen_block("not_num", state);
+
+    let numb_int = LoxValueType::Number.llvm_int(state.ctx);
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, tag, numb_int, "type_comp")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_num, b_nnum)?;
+
+    state.builder.position_at_end(b_nnum);
+    gen_panic_call(StringLiterals::ReMinusUnsupportedType, state)?;
+
+    state.builder.position_at_end(b_num);
+    let float_type = state.ctx.f64_type();
+    let fval = state
+        .builder
+        .build_load(float_type, union_ptr, "fval")?
+        .into_float_value();
+    let neg = state.builder.build_float_neg(fval, "neg_result")?;
+    let result = gen_alloc_lox_value(LoxValueType::Number, state)?;
+    gen_store_number(&result, neg, state)?;
+    Ok(result)
+}
+
 fn gen_eq<'a>(
     l: &Node,
     r: &Node,
@@ -493,7 +524,7 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
         },
         Node::Unary(node, op) => match op {
             Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
-            Operator::Minus => todo!(),
+            Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
             _ => unreachable!(),
         },
         Node::Call => todo!(),
