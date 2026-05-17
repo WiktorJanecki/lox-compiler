@@ -15,6 +15,7 @@ use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
 use std::collections::HashMap;
 use std::ffi::CString;
+use inkwell::basic_block::BasicBlock;
 
 mod gen_expr;
 mod gen_stmt;
@@ -139,6 +140,10 @@ fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> 
         .build_call(state.panic_fn, &[error_msg.into()], "_")?;
     state.builder.build_unreachable()?;
     Ok(())
+}
+
+fn gen_block<'a>(name: &str, state: &mut State<'a>) -> BasicBlock<'a> {
+   state.ctx.append_basic_block(state.current_fn, name) 
 }
 
 type VariableStack<'a> = Vec<HashMap<String, LoxValue<'a>>>;

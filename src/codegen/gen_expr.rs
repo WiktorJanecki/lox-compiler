@@ -1,10 +1,13 @@
 use crate::ast::{Ast, Node, Operator};
-use crate::codegen::lox_value::{gen_alloc_lox_value, gen_store_number, gen_unpack_lox_value};
+use crate::codegen::lox_value::{
+    gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value,
+};
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_panic_call, get_current_env,
+    LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_current_env,
     get_var_from_env, lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
+use std::ops::DerefMut;
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
@@ -312,26 +315,150 @@ fn gen_comp<'a>(
 
     Ok(lox_result)
 }
+
+fn gen_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
+    let val = gen_expr(node, ast, state)?;
+    let (tag, union_ptr) = gen_unpack_lox_value(&val, state)?;
+
+    let b_bool = gen_block("bool", state);
+    let b_nbool = gen_block("not_bool", state);
+
+    let bool_int = LoxValueType::Bool.llvm_int(state.ctx);
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, tag, bool_int, "type_comp")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_bool, b_nbool)?;
+
+    state.builder.position_at_end(b_nbool);
+    gen_panic_call(StringLiterals::ReNegationUnsupportedType, state)?;
+
+    state.builder.position_at_end(b_bool);
+    let bool_type = state.ctx.bool_type();
+    let bval = state
+        .builder
+        .build_load(bool_type, union_ptr, "bval")?
+        .into_int_value();
+    let neg = state.builder.build_not(bval, "neg_result")?;
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+    gen_store_bool(&result, neg, state)?;
+    Ok(result)
+}
+
+fn gen_eq<'a>(
+    l: &Node,
+    r: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    let left = gen_expr(l, ast, state)?;
+    let right = gen_expr(r, ast, state)?;
+
+    let (left_tag, left_union) = gen_unpack_lox_value(&left, state)?;
+    let (right_tag, right_union) = gen_unpack_lox_value(&right, state)?;
+
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+
+    let b_same_type = gen_block("same_type", state);
+    let b_str = gen_block("str", state);
+    let b_num = gen_block("num", state);
+    let b_bool = gen_block("bool", state);
+    let b_false = gen_block("false", state);
+    let b_nil = gen_block("nil", state); // true
+    let b_merge = gen_block("merge", state);
+    let b_unreach = gen_block("unreach", state);
+
+    let comp =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "type_comp")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_same_type, b_false)?;
+
+    state.builder.position_at_end(b_same_type);
+    let cases = &[
+        (LoxValueType::String.llvm_int(state.ctx), b_str),
+        (LoxValueType::Number.llvm_int(state.ctx), b_num),
+        (LoxValueType::Bool.llvm_int(state.ctx), b_bool),
+        (LoxValueType::Nil.llvm_int(state.ctx), b_nil),
+    ];
+    assert_eq!(cases.len(), LoxValueType::SIZE as usize);
+    state.builder.build_switch(left_tag, b_unreach, cases)?;
+
+    state.builder.position_at_end(b_unreach);
+    state.builder.build_unreachable()?;
+
+    state.builder.position_at_end(b_num);
+    let float_type = state.ctx.f64_type();
+    let lhs = state
+        .builder
+        .build_load(float_type, left_union, "left_f64")?
+        .into_float_value();
+    let rhs = state
+        .builder
+        .build_load(float_type, right_union, "right_f64")?
+        .into_float_value();
+    let comp = state
+        .builder
+        .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "f64_res")?;
+    gen_store_bool(&result, comp, state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_bool);
+    let bool_type = state.ctx.bool_type();
+    let lhs = state
+        .builder
+        .build_load(bool_type, left_union, "l")?
+        .into_int_value();
+    let rhs = state
+        .builder
+        .build_load(bool_type, right_union, "r")?
+        .into_int_value();
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, lhs, rhs, "comp")?;
+    gen_store_bool(&result, comp, state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_false);
+    gen_store_bool(&result, bool_type.const_zero(), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_nil);
+    gen_store_bool(&result, bool_type.const_int(1, false), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_str);
+    // TODO: string comparison from libc?
+    gen_store_bool(&result, bool_type.const_zero(), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_merge);
+    Ok(result)
+}
+
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {
         Node::Assignment(_call, lhs, rhs) => {
             // TODO: what to do with call
             let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
             let struct_type = state.lox_value;
-            let block = state.builder.get_insert_block().unwrap();;
+            let block = state.builder.get_insert_block().unwrap();
             let builder = state.ctx.create_builder();
             builder.position_at_end(block);
             let found = get_var_from_env(lhs, state)?;
 
             // copy from right to found
-            let src = builder.build_load(struct_type, right.ptr, "rhs_expr" )?;
+            let src = builder.build_load(struct_type, right.ptr, "rhs_expr")?;
             builder.build_store(found.ptr, src)?;
 
             Ok(right)
         }
         Node::Binary(l, op, r) => match op {
-            Operator::Eq => todo!(),
-            Operator::Neq => todo!(),
+            Operator::Eq => gen_eq(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Neq => unreachable!("sugared by parser"),
             Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
             Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
             Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
@@ -364,7 +491,11 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
             Operator::And => todo!(),
             Operator::Not => unreachable!(),
         },
-        Node::Unary(_, _) => todo!(),
+        Node::Unary(node, op) => match op {
+            Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
+            Operator::Minus => todo!(),
+            _ => unreachable!(),
+        },
         Node::Call => todo!(),
         Node::Identifier(id) => get_var_from_env(id, state).cloned(),
         Node::Super(_) => todo!(),

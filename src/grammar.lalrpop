@@ -120,7 +120,10 @@ LogicAnd: ast::NodeID = {
 
 Equality: ast::NodeID={
     <Equality> "==" <Comparison> => ctx.push(Node::Binary(<>, Operator::Eq, <>)),
-    <Equality> "!=" <Comparison> => ctx.push(Node::Binary(<>, Operator::Neq, <>)),
+    <Equality> "!=" <Comparison> => {
+        let eq = ctx.push(Node::Binary(<>, Operator::Eq, <>));
+        ctx.push(Node::Unary(eq, Operator::Not))
+    },
     <Comparison>,
 }
 

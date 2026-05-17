@@ -168,3 +168,46 @@ fn assigment() -> anyhow::Result<()> {
     ",6.0)?;
     Ok(())
 }
+
+#[test]
+fn equality_num() -> anyhow::Result<()> {
+    assert_output("print 1.0 == 6.9;", "false")?;
+    assert_output("print 1.0 != 6.9;", "true")?;
+    Ok(())
+}
+
+#[test]
+fn equality_bool() -> anyhow::Result<()> {
+    assert_output("print false == true;", "false")?;
+    assert_output("print true != true;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn equality_nil() -> anyhow::Result<()> {
+    assert_output("print nil == nil;", "true")?;
+    assert_output("print nil != nil;", "false")?;
+    Ok(())
+}
+#[test]
+fn equality_str() -> anyhow::Result<()> {
+    // TODO finish
+    Ok(())
+}
+
+#[test]
+fn equality_mismatched() -> anyhow::Result<()> {
+    assert_output("print \"sdf\" == nil;", "false")?;
+    assert_output("print 5.1 != false;", "true")?;
+    Ok(())
+}
+
+#[test]
+fn negation() -> anyhow::Result<()> {
+    assert_output("print !false;", "true")?;
+    assert_output("print !true;", "false")?;
+    should_runtime_error("print !5.0;")?;
+    should_runtime_error("print !nil;")?;
+    should_runtime_error("print !\"dfasoij\";")?;
+    Ok(())
+}
