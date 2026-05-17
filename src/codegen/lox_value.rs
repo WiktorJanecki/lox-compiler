@@ -181,13 +181,22 @@ pub fn gen_truthiness<'a>(
 
     state.builder.position_at_end(merge_block);
 
-    let result_union_ptr =
-        state
-            .builder
-            .build_struct_gep(state.lox_value, result.ptr, 1, "result_union_ptr")?;
-    let unwrapped_result = state
-        .builder
-        .build_load(bool_type, result_union_ptr, "result")?;
-    Ok(unwrapped_result.into_int_value())
+    let bool_val = unwrap_bool(&result, state)?;
+    Ok(bool_val)
     // TODO: function can be rewritten to not use lox value and alloca as result but good enough for now
+}
+
+pub fn unwrap_bool<'a>(
+    val: &LoxValue<'a>,
+    state: &mut State<'a>,
+) -> anyhow::Result<values::IntValue<'a>> {
+    let union_ptr = state
+        .builder
+        .build_struct_gep(state.lox_value, val.ptr, 1, "union_ptr")?;
+    let bool_type = state.ctx.bool_type();
+    let bool_val = state
+        .builder
+        .build_load(bool_type, union_ptr, "bool_val")?
+        .into_int_value();
+    Ok(bool_val)
 }

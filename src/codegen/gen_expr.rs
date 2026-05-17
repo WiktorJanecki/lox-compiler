@@ -1,6 +1,6 @@
 use crate::ast::{Ast, Node, Operator};
 use crate::codegen::lox_value::{
-    gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value,
+    gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value, unwrap_bool,
 };
 use crate::codegen::{
     LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_current_env,
@@ -332,7 +332,7 @@ fn gen_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<
         .build_conditional_branch(comp, b_bool, b_nbool)?;
 
     state.builder.position_at_end(b_nbool);
-    gen_panic_call(StringLiterals::ReNegationUnsupportedType, state)?;
+    gen_panic_call(StringLiterals::ReLogicUnsupportedType, state)?;
 
     state.builder.position_at_end(b_bool);
     let bool_type = state.ctx.bool_type();
@@ -345,7 +345,6 @@ fn gen_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<
     gen_store_bool(&result, neg, state)?;
     Ok(result)
 }
-
 
 fn gen_num_neg<'a>(node: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let val = gen_expr(node, ast, state)?;
@@ -470,6 +469,74 @@ fn gen_eq<'a>(
     Ok(result)
 }
 
+fn gen_or<'a>(
+    l: &Node,
+    r: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    let left = gen_expr(l, ast, state)?;
+    let (left_tag, _) = gen_unpack_lox_value(&left, state)?;
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+
+    let b_panic = gen_block("panic", state);
+    let b_merge = gen_block("merge", state);
+    let bool_tag = LoxValueType::Bool.llvm_int(state.ctx);
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, left_tag, bool_tag, "tag_comp")?;
+    let b_cont = gen_block("type_cont", state);
+    state
+        .builder
+        .build_conditional_branch(comp, b_cont, b_panic)?;
+
+    state.builder.position_at_end(b_panic);
+    gen_panic_call(StringLiterals::ReLogicUnsupportedType, state)?;
+
+    state.builder.position_at_end(b_cont);
+    let b_ret_true = gen_block("ret_true", state);
+    let b_cont = gen_block("first_val_cont", state);
+    let bool_val = unwrap_bool(&left, state)?;
+    state
+        .builder
+        .build_conditional_branch(bool_val, b_cont, b_ret_true)?;
+
+    state.builder.position_at_end(b_ret_true);
+    let bool_type = state.ctx.bool_type();
+    gen_store_bool(&result, bool_type.const_int(1,false), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    // eval right
+    state.builder.position_at_end(b_cont);
+    let right = gen_expr(r, ast, state)?;
+    let (right_tag, _) = gen_unpack_lox_value(&right, state)?;
+
+    let b_right_tag_bool = gen_block("right_tag_bool", state);
+    let comp = state.builder.build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
+    state.builder.build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
+
+    state.builder.position_at_end(b_right_tag_bool);
+    let to_write = unwrap_bool(&right, state)?;
+    gen_store_bool(&result, to_write, state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_merge);
+    Ok(result)
+}
+
+
+fn gen_and<'a>(
+    l: &Node,
+    r: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    // eval left
+    // if false merge with false return
+    // else eval right and do typechecking shit
+    todo!()
+}
+
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {
         Node::Assignment(_call, lhs, rhs) => {
@@ -518,8 +585,8 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
                 ast,
                 state,
             ),
-            Operator::Or => todo!(),
-            Operator::And => todo!(),
+            Operator::Or => gen_or(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::And => gen_and(&ast.nodes[*l], &ast.nodes[*r], ast, state),
             Operator::Not => unreachable!(),
         },
         Node::Unary(node, op) => match op {

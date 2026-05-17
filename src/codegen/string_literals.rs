@@ -17,7 +17,7 @@ pub enum StringLiterals {
     ReMulUnsupportedType,
     ReDivUnsupportedType,
     ReComparisonUnsupportedType,
-    ReNegationUnsupportedType,
+    ReLogicUnsupportedType,
 
     #[allow(clippy::upper_case_acronyms)]
     SIZE,
@@ -48,8 +48,8 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
         StringLiterals::ReComparisonUnsupportedType => {
             "Runtime error: Only Numbers can be compared\n"
         }
-        StringLiterals::ReNegationUnsupportedType => {
-            "Runtime error: Only booleans can be negated\n"
+        StringLiterals::ReLogicUnsupportedType => {
+            "Runtime error: Only booleans can be used in logical operators\n"
         }
         StringLiterals::SIZE => unreachable!(),
     }
