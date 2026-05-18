@@ -288,3 +288,14 @@ fn and_short_circ() -> anyhow::Result<()> {
     ", "true")?;
     Ok(())
 }
+
+#[test]
+fn copy() -> anyhow::Result<()> {
+    assert_output_f64("
+        var a = 0;
+        var b = a;
+        a = a + 1;
+        print b;
+    ", 0.0)?;
+    Ok(())
+}

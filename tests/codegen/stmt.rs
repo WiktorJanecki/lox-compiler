@@ -194,3 +194,44 @@ fn block_search_up() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn while_none() -> anyhow::Result<()> {
+    assert_output(
+        "
+            while(false)
+                print 1;
+        ",
+        "",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn while_some() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a = 0;
+            while(a < 5)
+            {
+               a = a + 1;
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+    Ok(())
+}
+#[test]
+fn for_some() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            for( var a = 0; a < 5; a = a + 1)
+            {
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+    Ok(())
+}

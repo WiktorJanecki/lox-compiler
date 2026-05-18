@@ -3,11 +3,10 @@ use crate::codegen::lox_value::{
     gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value, unwrap_bool,
 };
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_current_env,
-    get_var_from_env, lox_index_type,
+    LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_var_from_env,
+    lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
-use std::ops::DerefMut;
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
