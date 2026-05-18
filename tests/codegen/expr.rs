@@ -242,3 +242,49 @@ fn or_chained() -> anyhow::Result<()> {
     assert_output("print false or false or false or false;", "false")?;
     Ok(())
 }
+
+#[test]
+fn or_short_circ() -> anyhow::Result<()> {
+    assert_output("
+        var a = false;
+        false or (a = true);
+        print a;
+    ", "true")?;
+    assert_output("
+        var a = false;
+        true or (a = true);
+        print a;
+    ", "false")?;
+    Ok(())
+}
+
+#[test]
+fn and_expr() -> anyhow::Result<()> {
+    assert_output("print true and true;", "true")?;
+    assert_output("print false and true;", "false")?;
+    assert_output("print true and false;", "false")?;
+    assert_output("print false and false;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn and_chained() -> anyhow::Result<()> {
+    assert_output("print false and false and true and false;", "false")?;
+    assert_output("print true and true and true;", "true")?;
+    Ok(())
+}
+
+#[test]
+fn and_short_circ() -> anyhow::Result<()> {
+    assert_output("
+        var a = false;
+        false and (a = true);
+        print a;
+    ", "false")?;
+    assert_output("
+        var a = false;
+        true and (a = true);
+        print a;
+    ", "true")?;
+    Ok(())
+}

@@ -535,10 +535,58 @@ fn gen_and<'a>(
     ast: &Ast,
     state: &mut State<'a>,
 ) -> anyhow::Result<LoxValue<'a>> {
-    // eval left
-    // if false merge with false return
-    // else eval right and do typechecking shit
-    todo!()
+    let left = gen_expr(l, ast, state)?;
+    let (left_tag, _) = gen_unpack_lox_value(&left, state)?;
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
+
+    let b_panic = gen_block("panic", state);
+    let b_merge = gen_block("merge", state);
+    let bool_tag = LoxValueType::Bool.llvm_int(state.ctx);
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, left_tag, bool_tag, "tag_comp")?;
+    let b_cont = gen_block("type_cont", state);
+    state
+        .builder
+        .build_conditional_branch(comp, b_cont, b_panic)?;
+
+    state.builder.position_at_end(b_panic);
+    gen_panic_call(StringLiterals::ReLogicUnsupportedType, state)?;
+
+    state.builder.position_at_end(b_cont);
+    let b_ret_false = gen_block("ret_false", state);
+    let b_cont = gen_block("first_val_cont", state);
+    let bool_val = unwrap_bool(&left, state)?;
+    state
+        .builder
+        .build_conditional_branch(bool_val, b_cont, b_ret_false)?;
+
+    state.builder.position_at_end(b_ret_false);
+    let bool_type = state.ctx.bool_type();
+    gen_store_bool(&result, bool_type.const_zero(), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    // eval right
+    state.builder.position_at_end(b_cont);
+    let right = gen_expr(r, ast, state)?;
+    let (right_tag, _) = gen_unpack_lox_value(&right, state)?;
+
+    let b_right_tag_bool = gen_block("right_tag_bool", state);
+    let comp =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
+
+    state.builder.position_at_end(b_right_tag_bool);
+    let to_write = unwrap_bool(&right, state)?;
+    gen_store_bool(&result, to_write, state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_merge);
+    Ok(result)
 }
 
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
