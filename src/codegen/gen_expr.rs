@@ -8,6 +8,76 @@ use crate::codegen::{
 };
 use inkwell::{FloatPredicate, IntPredicate};
 
+pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
+    match expr {
+        Node::Assignment(_call, lhs, rhs) => {
+            // TODO: what to do with call
+            let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
+            let struct_type = state.lox_value;
+            let block = state.builder.get_insert_block().unwrap();
+            let builder = state.ctx.create_builder();
+            builder.position_at_end(block);
+            let found = get_var_from_env(lhs, state)?;
+
+            // copy from right to found
+            let src = builder.build_load(struct_type, right.ptr, "rhs_expr")?;
+            builder.build_store(found.ptr, src)?;
+
+            Ok(right)
+        }
+        Node::Binary(l, op, r) => match op {
+            Operator::Eq => gen_eq(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Neq => unreachable!("sugared by parser"),
+            Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
+            Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
+            Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
+            Operator::Greater => {
+                gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Ge, ast, state)
+            }
+            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Minus => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Minus,
+                ast,
+                state,
+            ),
+            Operator::Mul => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Mul,
+                ast,
+                state,
+            ),
+            Operator::Div => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Div,
+                ast,
+                state,
+            ),
+            Operator::Or => gen_or(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::And => gen_and(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Not => unreachable!(),
+        },
+        Node::Unary(node, op) => match op {
+            Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
+            Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
+            _ => unreachable!(),
+        },
+        Node::Call => todo!(),
+        Node::Identifier(id) => get_var_from_env(id, state).cloned(),
+        Node::Super(_) => todo!(),
+        Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
+        Node::Number(n) => gen_number(*n, state),
+        Node::String(s) => gen_string(s, state),
+        Node::Bool(b) => gen_bool(*b, state),
+        Node::Nil => gen_nil(state),
+        Node::This => todo!(),
+        _ => unreachable!(),
+    }
+}
+
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
     let union = state
@@ -586,74 +656,4 @@ fn gen_and<'a>(
 
     state.builder.position_at_end(b_merge);
     Ok(result)
-}
-
-pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    match expr {
-        Node::Assignment(_call, lhs, rhs) => {
-            // TODO: what to do with call
-            let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
-            let struct_type = state.lox_value;
-            let block = state.builder.get_insert_block().unwrap();
-            let builder = state.ctx.create_builder();
-            builder.position_at_end(block);
-            let found = get_var_from_env(lhs, state)?;
-
-            // copy from right to found
-            let src = builder.build_load(struct_type, right.ptr, "rhs_expr")?;
-            builder.build_store(found.ptr, src)?;
-
-            Ok(right)
-        }
-        Node::Binary(l, op, r) => match op {
-            Operator::Eq => gen_eq(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Neq => unreachable!("sugared by parser"),
-            Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
-            Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
-            Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
-            Operator::Greater => {
-                gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Ge, ast, state)
-            }
-            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Minus => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Minus,
-                ast,
-                state,
-            ),
-            Operator::Mul => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Mul,
-                ast,
-                state,
-            ),
-            Operator::Div => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Div,
-                ast,
-                state,
-            ),
-            Operator::Or => gen_or(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::And => gen_and(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Not => unreachable!(),
-        },
-        Node::Unary(node, op) => match op {
-            Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
-            Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
-            _ => unreachable!(),
-        },
-        Node::Call => todo!(),
-        Node::Identifier(id) => get_var_from_env(id, state).cloned(),
-        Node::Super(_) => todo!(),
-        Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
-        Node::Number(n) => gen_number(*n, state),
-        Node::String(s) => gen_string(s, state),
-        Node::Bool(b) => gen_bool(*b, state),
-        Node::Nil => gen_nil(state),
-        Node::This => todo!(),
-        _ => unreachable!(),
-    }
 }

@@ -290,10 +290,22 @@ fn and_short_circ() -> anyhow::Result<()> {
 }
 
 #[test]
-fn copy() -> anyhow::Result<()> {
+fn copy_on_decl() -> anyhow::Result<()> {
     assert_output_f64("
         var a = 0;
         var b = a;
+        a = a + 1;
+        print b;
+    ", 0.0)?;
+    Ok(())
+}
+
+#[test]
+fn copy_on_assignment() -> anyhow::Result<()> {
+    assert_output_f64("
+        var a = 0;
+        var b;
+        b = a;
         a = a + 1;
         print b;
     ", 0.0)?;

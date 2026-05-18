@@ -2,7 +2,7 @@ use crate::ast;
 use crate::ast::{Ast, Node};
 use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::gen_stmt::gen_statement;
-use crate::codegen::lox_value::{LoxValue, LoxValueType};
+use crate::codegen::lox_value::{gen_alloc_lox_value, LoxValue, LoxValueType};
 use crate::codegen::string_literals::{
     StringLiterals, gen_global_string_literals, global_string_literal,
 };
@@ -119,7 +119,10 @@ fn get_var_from_env<'a, 'b>(
 
 fn gen_var_decl(id: &str, rval: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     let lox_value = gen_expr(rval, ast, state)?;
-    get_current_env(state).insert(id.to_owned(), lox_value); // if exist overwrites correctly
+    let src = state.builder.build_load(state.lox_value, lox_value.ptr, "copy")?;
+    let dst = gen_alloc_lox_value(LoxValueType::Nil, state)?;
+    state.builder.build_store(dst.ptr,src)?;
+    get_current_env(state).insert(id.to_owned(),dst); // if exist overwrites correctly
     Ok(())
 }
 
