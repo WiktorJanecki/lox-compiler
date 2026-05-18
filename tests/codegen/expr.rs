@@ -158,14 +158,17 @@ fn comparison_err() -> anyhow::Result<()> {
 }
 #[test]
 fn assigment() -> anyhow::Result<()> {
-    assert_output_f64("var a = 5; print a = 6;",6.)?;
-    assert_output_f64("
+    assert_output_f64("var a = 5; print a = 6;", 6.)?;
+    assert_output_f64(
+        "
         var a;
         var b;
         var c;
         a = b = c = 2;
         print a + b + c;
-    ",6.0)?;
+    ",
+        6.0,
+    )?;
     Ok(())
 }
 
@@ -221,5 +224,21 @@ fn unary_minus() -> anyhow::Result<()> {
     should_runtime_error("print -nil;")?;
     should_runtime_error("print -\"fdsaf\";")?;
 
+    Ok(())
+}
+
+#[test]
+fn or_expr() -> anyhow::Result<()> {
+    assert_output("print true or true;", "true")?;
+    assert_output("print false or true;", "true")?;
+    assert_output("print true or false;", "true")?;
+    assert_output("print false or false;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn or_chained() -> anyhow::Result<()> {
+    assert_output("print false or false  or true or false or false;", "true")?;
+    assert_output("print false or false or false or false;", "false")?;
     Ok(())
 }

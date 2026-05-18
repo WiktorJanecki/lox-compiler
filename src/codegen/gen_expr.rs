@@ -499,11 +499,11 @@ fn gen_or<'a>(
     let bool_val = unwrap_bool(&left, state)?;
     state
         .builder
-        .build_conditional_branch(bool_val, b_cont, b_ret_true)?;
+        .build_conditional_branch(bool_val, b_ret_true, b_cont)?;
 
     state.builder.position_at_end(b_ret_true);
     let bool_type = state.ctx.bool_type();
-    gen_store_bool(&result, bool_type.const_int(1,false), state)?;
+    gen_store_bool(&result, bool_type.const_int(1, false), state)?;
     state.builder.build_unconditional_branch(b_merge)?;
 
     // eval right
@@ -512,8 +512,13 @@ fn gen_or<'a>(
     let (right_tag, _) = gen_unpack_lox_value(&right, state)?;
 
     let b_right_tag_bool = gen_block("right_tag_bool", state);
-    let comp = state.builder.build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
-    state.builder.build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
+    let comp =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
 
     state.builder.position_at_end(b_right_tag_bool);
     let to_write = unwrap_bool(&right, state)?;
@@ -523,7 +528,6 @@ fn gen_or<'a>(
     state.builder.position_at_end(b_merge);
     Ok(result)
 }
-
 
 fn gen_and<'a>(
     l: &Node,
