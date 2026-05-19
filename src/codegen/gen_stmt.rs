@@ -73,6 +73,7 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
         .expect("used after gen_extern_functions");
     let (tag_val, union_ptr) = gen_unpack_lox_value(&lox_val, state)?;
     let parent_func = state.current_fn;
+    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
     let nil_block = state.ctx.append_basic_block(parent_func, "print.nil");
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
@@ -80,7 +81,6 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     let true_block = state.ctx.append_basic_block(parent_func, "print.bool.true");
     let false_block = state.ctx.append_basic_block(parent_func, "print.bool.fals");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
-    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
 
     let cases = &[
         (LoxValueType::Nil.llvm_int(state.ctx), nil_block),

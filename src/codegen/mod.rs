@@ -1,11 +1,13 @@
 use crate::ast;
-use crate::ast::{Ast, Node};
+use crate::ast::{Ast, Id, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
+use crate::codegen::gen_fun::gen_fun_decl;
 use crate::codegen::gen_stmt::gen_statement;
 use crate::codegen::lox_value::{LoxValue, LoxValueType};
 use crate::codegen::string_literals::{
     StringLiterals, gen_global_string_literals, global_string_literal,
 };
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -15,9 +17,9 @@ use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
 use std::collections::HashMap;
 use std::ffi::CString;
-use inkwell::basic_block::BasicBlock;
 
 mod gen_expr;
+mod gen_fun;
 mod gen_stmt;
 mod lox_value;
 mod string_literals;
@@ -65,7 +67,9 @@ fn gen_begin_main(state: &mut State) {
         .add_function("main", state.ctx.i32_type().fn_type(&[], false), None);
     let entry = state.ctx.append_basic_block(main_fn, "entry");
     state.current_fn = main_fn;
-    state.vars.insert(main_fn.get_name().to_owned(), vec![HashMap::new()]);
+    state
+        .vars
+        .insert(main_fn.get_name().to_owned(), vec![HashMap::new()]);
     state.builder.position_at_end(entry);
 }
 
@@ -107,8 +111,8 @@ fn get_var_from_env<'a, 'b>(
 ) -> anyhow::Result<&'b mut LoxValue<'a>> {
     let err = format!("Usage of undeclared variable `{}`", name);
     let stack = state.vars.get_mut(state.current_fn.get_name()).unwrap();
-    
-    for hm in stack.iter_mut().rev(){
+
+    for hm in stack.iter_mut().rev() {
         if hm.contains_key(name) {
             return Ok(hm.get_mut(name).unwrap());
         }
@@ -127,7 +131,7 @@ fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<
     match decl {
         Node::VarDecl(id, expr_id) => gen_var_decl(id, &ast.nodes[*expr_id], ast, state),
         Node::ClassDecl(_, _, _) => todo!(),
-        Node::FunDecl(_, _, _) => todo!(),
+        Node::FunDecl(id, args, body_id) => gen_fun_decl(id, args, body_id, ast, state),
         Node::Stmt(stmt_id) => gen_statement(&ast.nodes[*stmt_id], ast, state),
         _ => unreachable!("In program vector only decl nodes are pushed during parsing"),
     }
@@ -143,7 +147,7 @@ fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> 
 }
 
 fn gen_block<'a>(name: &str, state: &mut State<'a>) -> BasicBlock<'a> {
-   state.ctx.append_basic_block(state.current_fn, name) 
+    state.ctx.append_basic_block(state.current_fn, name)
 }
 
 type VariableStack<'a> = Vec<HashMap<String, LoxValue<'a>>>;
@@ -195,7 +199,6 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
     // builder should be at @main.entry
     gen_return_zero(&mut state)?;
 
-    // println!("{}", state.module.to_string());
     if let Err(err) = state.module.verify() {
         eprintln!("Błąd weryfikacji IR: {}", err.to_string());
     }
