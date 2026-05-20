@@ -71,28 +71,76 @@ Stmt: ast::NodeID = {
     },
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
     "for" "(" <v:VarDecl> <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
         let comp = if let Some(unw) = c{
             unw
         }
         else{
             ctx.push(Node::Bool(true))
         };
-        let s_stmt = ctx.push(Node::Stmt(s));
-        let p_exprstmt = ctx.push(Node::ExprStmt(p.expect("TODO")));
-        let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
-        let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
+            body
+        }
+        else{
+            s
+        };
         let while_stmt=  ctx.push(Node::WhileStmt(comp,body));
         let for_decl = ctx.push(Node::Stmt(while_stmt));
 
         ctx.push(Node::Block(vec![v,for_decl]))
     },
-    "for" "(" <Expr> ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "(" <v:Expr> ";" <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
+            body
+        }
+        else{
+            s
+        };
+        let while_stmt=  ctx.push(Node::WhileStmt(comp,body));
+        let for_decl = ctx.push(Node::Stmt(while_stmt));
+
+        let v_estmt = ctx.push(Node::ExprStmt(v));
+        let v_stmt = ctx.push(Node::Stmt(v_estmt));
+
+        ctx.push(Node::Block(vec![v_stmt,for_decl]))
     },
-    "for" "("  ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "("  ";" <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
+            body
+        }
+        else{
+            s
+        };
+        ctx.push(Node::WhileStmt(comp,body))
     },
     "while" "(" <Expr> ")" <Stmt> => {
         ctx.push(Node::WhileStmt(<>,<>))

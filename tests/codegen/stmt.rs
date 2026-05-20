@@ -223,15 +223,118 @@ fn while_some() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
-fn for_some() -> anyhow::Result<()> {
+fn full_for_some() -> anyhow::Result<()> {
     assert_output_f64(
         "
             for( var a = 0; a < 5; a = a + 1)
+            {
+            print a;
+            }
+        ",
+        4.0,
+    )?;
+    assert_output_f64(
+        "
+            for( var a = 0; a < 5;)
+            {
+                a = a + 1;
+                print a;
+            }
+        ",
+        5.0,
+    )?;
+    // TODO: after funcs and return rewrite this
+    // assert_output_f64(
+    //     "
+    //         for( var a = 0;;)
+    //         {
+    //             if ( a > 5)
+    //                 break;
+    //             a = a + 1;
+    //         }
+    //         print a;
+    //     ",
+    //     5.0,
+    // )?;
+    Ok(())
+}
+
+#[test]
+fn expr_for_some() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a;
+            for( a = 0; a < 5; a = a + 1)
             {
             }
             print a;
         ",
         5.0,
     )?;
+    assert_output_f64(
+        "
+            var a;
+            for( a = 0; a < 5;)
+            {
+                a = a + 1;
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+    // TODO: after funcs and return rewrite this
+    // assert_output_f64(
+    //     "
+    //         var a;
+    //         for( a = 0;;)
+    //         {
+    //             if ( a > 5)
+    //                 break;
+    //             a = a + 1;
+    //         }
+    //         print a;
+    //     ",
+    //     5.0,
+    // )?;
+    Ok(())
+}
+
+#[test]
+fn empty_for_some() -> anyhow::Result<()> {
+    assert_output_f64(
+        "
+            var a = 0;
+            for(; a < 5; a = a + 1)
+            {
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+    assert_output_f64(
+        "
+            var a = 0;
+            for(; a < 5;)
+            {
+                a = a + 1;
+            }
+            print a;
+        ",
+        5.0,
+    )?;
+    // TODO: after funcs and return rewrite this
+    // assert_output_f64(
+    //     "
+    //         var a = 0;
+    //         for(;;)
+    //         {
+    //             if ( a > 5)
+    //                 break;
+    //             a = a + 1;
+    //         }
+    //         print a;
+    //     ",
+    //     5.0,
+    // )?;
     Ok(())
 }
