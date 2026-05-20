@@ -3,11 +3,80 @@ use crate::codegen::lox_value::{
     gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value, unwrap_bool,
 };
 use crate::codegen::{
-    LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_current_env,
-    get_var_from_env, lox_index_type,
+    LoxValue, LoxValueType, State, StringLiterals, gen_block, gen_panic_call, get_var_from_env,
+    lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
-use std::ops::DerefMut;
+
+pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
+    match expr {
+        Node::Assignment(_call, lhs, rhs) => {
+            // TODO: what to do with call
+            let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
+            let struct_type = state.lox_value;
+            let block = state.builder.get_insert_block().unwrap();
+            let builder = state.ctx.create_builder();
+            builder.position_at_end(block);
+            let found = get_var_from_env(lhs, state)?;
+
+            // copy from right to found
+            let src = builder.build_load(struct_type, right.ptr, "rhs_expr")?;
+            builder.build_store(found.ptr, src)?;
+
+            Ok(right)
+        }
+        Node::Binary(l, op, r) => match op {
+            Operator::Eq => gen_eq(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Neq => unreachable!("sugared by parser"),
+            Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
+            Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
+            Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
+            Operator::Greater => {
+                gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Ge, ast, state)
+            }
+            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Minus => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Minus,
+                ast,
+                state,
+            ),
+            Operator::Mul => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Mul,
+                ast,
+                state,
+            ),
+            Operator::Div => gen_number_binop(
+                &ast.nodes[*l],
+                &ast.nodes[*r],
+                GenNumberBinopAllowed::Div,
+                ast,
+                state,
+            ),
+            Operator::Or => gen_or(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::And => gen_and(&ast.nodes[*l], &ast.nodes[*r], ast, state),
+            Operator::Not => unreachable!(),
+        },
+        Node::Unary(node, op) => match op {
+            Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
+            Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
+            _ => unreachable!(),
+        },
+        Node::Call => todo!(),
+        Node::Identifier(id) => get_var_from_env(id, state).cloned(),
+        Node::Super(_) => todo!(),
+        Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
+        Node::Number(n) => gen_number(*n, state),
+        Node::String(s) => gen_string(s, state),
+        Node::Bool(b) => gen_bool(*b, state),
+        Node::Nil => gen_nil(state),
+        Node::This => todo!(),
+        _ => unreachable!(),
+    }
+}
 
 fn gen_string<'a>(val: &str, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     let lox = gen_alloc_lox_value(LoxValueType::String, state)?;
@@ -499,11 +568,11 @@ fn gen_or<'a>(
     let bool_val = unwrap_bool(&left, state)?;
     state
         .builder
-        .build_conditional_branch(bool_val, b_cont, b_ret_true)?;
+        .build_conditional_branch(bool_val, b_ret_true, b_cont)?;
 
     state.builder.position_at_end(b_ret_true);
     let bool_type = state.ctx.bool_type();
-    gen_store_bool(&result, bool_type.const_int(1,false), state)?;
+    gen_store_bool(&result, bool_type.const_int(1, false), state)?;
     state.builder.build_unconditional_branch(b_merge)?;
 
     // eval right
@@ -512,8 +581,13 @@ fn gen_or<'a>(
     let (right_tag, _) = gen_unpack_lox_value(&right, state)?;
 
     let b_right_tag_bool = gen_block("right_tag_bool", state);
-    let comp = state.builder.build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
-    state.builder.build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
+    let comp =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
 
     state.builder.position_at_end(b_right_tag_bool);
     let to_write = unwrap_bool(&right, state)?;
@@ -524,85 +598,62 @@ fn gen_or<'a>(
     Ok(result)
 }
 
-
 fn gen_and<'a>(
     l: &Node,
     r: &Node,
     ast: &Ast,
     state: &mut State<'a>,
 ) -> anyhow::Result<LoxValue<'a>> {
-    // eval left
-    // if false merge with false return
-    // else eval right and do typechecking shit
-    todo!()
-}
+    let left = gen_expr(l, ast, state)?;
+    let (left_tag, _) = gen_unpack_lox_value(&left, state)?;
+    let result = gen_alloc_lox_value(LoxValueType::Bool, state)?;
 
-pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
-    match expr {
-        Node::Assignment(_call, lhs, rhs) => {
-            // TODO: what to do with call
-            let right = gen_expr(&ast.nodes[*rhs], ast, state)?;
-            let struct_type = state.lox_value;
-            let block = state.builder.get_insert_block().unwrap();
-            let builder = state.ctx.create_builder();
-            builder.position_at_end(block);
-            let found = get_var_from_env(lhs, state)?;
+    let b_panic = gen_block("panic", state);
+    let b_merge = gen_block("merge", state);
+    let bool_tag = LoxValueType::Bool.llvm_int(state.ctx);
+    let comp = state
+        .builder
+        .build_int_compare(IntPredicate::EQ, left_tag, bool_tag, "tag_comp")?;
+    let b_cont = gen_block("type_cont", state);
+    state
+        .builder
+        .build_conditional_branch(comp, b_cont, b_panic)?;
 
-            // copy from right to found
-            let src = builder.build_load(struct_type, right.ptr, "rhs_expr")?;
-            builder.build_store(found.ptr, src)?;
+    state.builder.position_at_end(b_panic);
+    gen_panic_call(StringLiterals::ReLogicUnsupportedType, state)?;
 
-            Ok(right)
-        }
-        Node::Binary(l, op, r) => match op {
-            Operator::Eq => gen_eq(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Neq => unreachable!("sugared by parser"),
-            Operator::Geq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Geq, ast, state),
-            Operator::Leq => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Leq, ast, state),
-            Operator::Less => gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Le, ast, state),
-            Operator::Greater => {
-                gen_comp(&ast.nodes[*l], &ast.nodes[*r], Comparisons::Ge, ast, state)
-            }
-            Operator::Plus => gen_plus(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Minus => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Minus,
-                ast,
-                state,
-            ),
-            Operator::Mul => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Mul,
-                ast,
-                state,
-            ),
-            Operator::Div => gen_number_binop(
-                &ast.nodes[*l],
-                &ast.nodes[*r],
-                GenNumberBinopAllowed::Div,
-                ast,
-                state,
-            ),
-            Operator::Or => gen_or(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::And => gen_and(&ast.nodes[*l], &ast.nodes[*r], ast, state),
-            Operator::Not => unreachable!(),
-        },
-        Node::Unary(node, op) => match op {
-            Operator::Not => gen_neg(&ast.nodes[*node], ast, state),
-            Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
-            _ => unreachable!(),
-        },
-        Node::Call => todo!(),
-        Node::Identifier(id) => get_var_from_env(id, state).cloned(),
-        Node::Super(_) => todo!(),
-        Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
-        Node::Number(n) => gen_number(*n, state),
-        Node::String(s) => gen_string(s, state),
-        Node::Bool(b) => gen_bool(*b, state),
-        Node::Nil => gen_nil(state),
-        Node::This => todo!(),
-        _ => unreachable!(),
-    }
+    state.builder.position_at_end(b_cont);
+    let b_ret_false = gen_block("ret_false", state);
+    let b_cont = gen_block("first_val_cont", state);
+    let bool_val = unwrap_bool(&left, state)?;
+    state
+        .builder
+        .build_conditional_branch(bool_val, b_cont, b_ret_false)?;
+
+    state.builder.position_at_end(b_ret_false);
+    let bool_type = state.ctx.bool_type();
+    gen_store_bool(&result, bool_type.const_zero(), state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    // eval right
+    state.builder.position_at_end(b_cont);
+    let right = gen_expr(r, ast, state)?;
+    let (right_tag, _) = gen_unpack_lox_value(&right, state)?;
+
+    let b_right_tag_bool = gen_block("right_tag_bool", state);
+    let comp =
+        state
+            .builder
+            .build_int_compare(IntPredicate::EQ, left_tag, right_tag, "tag_bool")?;
+    state
+        .builder
+        .build_conditional_branch(comp, b_right_tag_bool, b_panic)?;
+
+    state.builder.position_at_end(b_right_tag_bool);
+    let to_write = unwrap_bool(&right, state)?;
+    gen_store_bool(&result, to_write, state)?;
+    state.builder.build_unconditional_branch(b_merge)?;
+
+    state.builder.position_at_end(b_merge);
+    Ok(result)
 }

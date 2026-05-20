@@ -158,14 +158,17 @@ fn comparison_err() -> anyhow::Result<()> {
 }
 #[test]
 fn assigment() -> anyhow::Result<()> {
-    assert_output_f64("var a = 5; print a = 6;",6.)?;
-    assert_output_f64("
+    assert_output_f64("var a = 5; print a = 6;", 6.)?;
+    assert_output_f64(
+        "
         var a;
         var b;
         var c;
         a = b = c = 2;
         print a + b + c;
-    ",6.0)?;
+    ",
+        6.0,
+    )?;
     Ok(())
 }
 
@@ -221,5 +224,90 @@ fn unary_minus() -> anyhow::Result<()> {
     should_runtime_error("print -nil;")?;
     should_runtime_error("print -\"fdsaf\";")?;
 
+    Ok(())
+}
+
+#[test]
+fn or_expr() -> anyhow::Result<()> {
+    assert_output("print true or true;", "true")?;
+    assert_output("print false or true;", "true")?;
+    assert_output("print true or false;", "true")?;
+    assert_output("print false or false;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn or_chained() -> anyhow::Result<()> {
+    assert_output("print false or false  or true or false or false;", "true")?;
+    assert_output("print false or false or false or false;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn or_short_circ() -> anyhow::Result<()> {
+    assert_output("
+        var a = false;
+        false or (a = true);
+        print a;
+    ", "true")?;
+    assert_output("
+        var a = false;
+        true or (a = true);
+        print a;
+    ", "false")?;
+    Ok(())
+}
+
+#[test]
+fn and_expr() -> anyhow::Result<()> {
+    assert_output("print true and true;", "true")?;
+    assert_output("print false and true;", "false")?;
+    assert_output("print true and false;", "false")?;
+    assert_output("print false and false;", "false")?;
+    Ok(())
+}
+
+#[test]
+fn and_chained() -> anyhow::Result<()> {
+    assert_output("print false and false and true and false;", "false")?;
+    assert_output("print true and true and true;", "true")?;
+    Ok(())
+}
+
+#[test]
+fn and_short_circ() -> anyhow::Result<()> {
+    assert_output("
+        var a = false;
+        false and (a = true);
+        print a;
+    ", "false")?;
+    assert_output("
+        var a = false;
+        true and (a = true);
+        print a;
+    ", "true")?;
+    Ok(())
+}
+
+#[test]
+fn copy_on_decl() -> anyhow::Result<()> {
+    assert_output_f64("
+        var a = 0;
+        var b = a;
+        a = a + 1;
+        print b;
+    ", 0.0)?;
+    Ok(())
+}
+
+#[test]
+fn copy_on_assignment() -> anyhow::Result<()> {
+    assert_output_f64("
+        var a = 0;
+        var b;
+        b = a;
+        a = a + 1;
+        print b;
+    ", 0.0)?;
     Ok(())
 }

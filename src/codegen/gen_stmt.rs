@@ -1,8 +1,8 @@
 use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
-use crate::codegen::{State, lox_index_type, get_current_env, push_new_env, pop_env, gen_declaration};
+use crate::codegen::{State, gen_declaration, pop_env, push_new_env, gen_block};
 use inkwell::AddressSpace;
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
@@ -20,16 +20,16 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
             gen_print_stmt(lox_val, state)
         }
         Node::ReturnStmt(_) => todo!(),
-        Node::WhileStmt(_, _) => todo!(),
+        Node::WhileStmt(expr_id, stmt_id) => gen_while(&ast.nodes[*expr_id], &ast.nodes[*stmt_id], ast, state),
         Node::Block(decls) => {
             push_new_env(state)?;
-            for decl in decls{
+            for decl in decls {
                 gen_declaration(&ast.nodes[*decl], ast, state)?;
             }
             pop_env(state)?;
 
             Ok(())
-        },
+        }
         _ => unreachable!("Stmt node can only have statements -> assured during parsing"),
     }
 }
@@ -147,5 +147,29 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(merge_block);
+    Ok(())
+}
+fn gen_while<'a>(
+    expr: &Node,
+    stmt: &Node,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<()> {
+    let b_check = gen_block("check", state);
+    let b_body = gen_block("body", state);
+    let b_merge = gen_block("merge", state);
+
+    state.builder.build_unconditional_branch(b_check)?;
+
+    state.builder.position_at_end(b_check);
+    let eval = gen_expr(expr, ast, state)?;
+    let truth = unwrap_bool(&eval,state)?;
+    state.builder.build_conditional_branch(truth, b_body, b_merge)?;
+
+    state.builder.position_at_end(b_body);
+    gen_statement(stmt,ast,state)?;
+    state.builder.build_unconditional_branch(b_check)?;
+
+    state.builder.position_at_end(b_merge);
     Ok(())
 }
