@@ -70,9 +70,21 @@ Stmt: ast::NodeID = {
         ctx.push(Node::ReturnStmt(nil))
     },
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
-    "for" "(" <VarDecl> <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "(" <v:VarDecl> <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+        let s_stmt = ctx.push(Node::Stmt(s));
+        let p_exprstmt = ctx.push(Node::ExprStmt(p.expect("TODO")));
+        let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+        let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
+        let while_stmt=  ctx.push(Node::WhileStmt(comp,body));
+        let for_decl = ctx.push(Node::Stmt(while_stmt));
+
+        ctx.push(Node::Block(vec![v,for_decl]))
     },
     "for" "(" <Expr> ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
        // TODO add desugared while loop
