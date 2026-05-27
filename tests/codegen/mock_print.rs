@@ -1,10 +1,10 @@
-use std::fmt::Write;
 use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use loxc::codegen::codegen;
 use loxc::parser::parse;
 use std::cell::RefCell;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
+use std::fmt::Write;
 
 thread_local! {
     /// Theoretically thread-safe, so does not interrupt quick testing
@@ -55,12 +55,11 @@ pub fn assert_output_f64(src: &'static str, should_output: f64) -> anyhow::Resul
 
     let epsilon = 0.0001;
     // eprintln!("{} {}", number, should_output);
-    assert!((number - should_output).abs() < epsilon );
+    assert!((number - should_output).abs() < epsilon);
     Ok(())
 }
 
 fn run_with_print(src: &'static str) -> anyhow::Result<String> {
-
     let ast = parse(src)?;
     let mut context = Context::create();
     let module = codegen(ast, &mut context)?;
@@ -98,7 +97,7 @@ pub fn should_runtime_error(src: &'static str) -> anyhow::Result<()> {
 
     unsafe {
         // catch all calls to libc exit
-        let _= std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             engine.run_function_as_main(module.get_function("main").unwrap(), &[]);
         }));
         // this will panic and kill the test process

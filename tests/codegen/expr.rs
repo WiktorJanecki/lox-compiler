@@ -245,16 +245,22 @@ fn or_chained() -> anyhow::Result<()> {
 
 #[test]
 fn or_short_circ() -> anyhow::Result<()> {
-    assert_output("
+    assert_output(
+        "
         var a = false;
         false or (a = true);
         print a;
-    ", "true")?;
-    assert_output("
+    ",
+        "true",
+    )?;
+    assert_output(
+        "
         var a = false;
         true or (a = true);
         print a;
-    ", "false")?;
+    ",
+        "false",
+    )?;
     Ok(())
 }
 
@@ -276,38 +282,50 @@ fn and_chained() -> anyhow::Result<()> {
 
 #[test]
 fn and_short_circ() -> anyhow::Result<()> {
-    assert_output("
+    assert_output(
+        "
         var a = false;
         false and (a = true);
         print a;
-    ", "false")?;
-    assert_output("
+    ",
+        "false",
+    )?;
+    assert_output(
+        "
         var a = false;
         true and (a = true);
         print a;
-    ", "true")?;
+    ",
+        "true",
+    )?;
     Ok(())
 }
 
 #[test]
 fn copy_on_decl() -> anyhow::Result<()> {
-    assert_output_f64("
+    assert_output_f64(
+        "
         var a = 0;
         var b = a;
         a = a + 1;
         print b;
-    ", 0.0)?;
+    ",
+        0.0,
+    )?;
     Ok(())
 }
 
 #[test]
 fn copy_on_assignment() -> anyhow::Result<()> {
-    assert_output_f64("
+    assert_output_f64(
+        "
         var a = 0;
         var b;
         b = a;
         a = a + 1;
         print b;
-    ", 0.0)?;
+    ",
+        0.0,
+    )?;
     Ok(())
 }

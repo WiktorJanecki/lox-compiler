@@ -2,10 +2,11 @@ use crate::ast;
 use crate::ast::{Ast, Node};
 use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::gen_stmt::gen_statement;
-use crate::codegen::lox_value::{gen_alloc_lox_value, LoxValue, LoxValueType};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_alloc_lox_value};
 use crate::codegen::string_literals::{
     StringLiterals, gen_global_string_literals, global_string_literal,
 };
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -15,7 +16,6 @@ use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
 use std::collections::HashMap;
 use std::ffi::CString;
-use inkwell::basic_block::BasicBlock;
 
 mod gen_expr;
 mod gen_stmt;
@@ -65,7 +65,9 @@ fn gen_begin_main(state: &mut State) {
         .add_function("main", state.ctx.i32_type().fn_type(&[], false), None);
     let entry = state.ctx.append_basic_block(main_fn, "entry");
     state.current_fn = main_fn;
-    state.vars.insert(main_fn.get_name().to_owned(), vec![HashMap::new()]);
+    state
+        .vars
+        .insert(main_fn.get_name().to_owned(), vec![HashMap::new()]);
     state.builder.position_at_end(entry);
 }
 
@@ -107,8 +109,8 @@ fn get_var_from_env<'a, 'b>(
 ) -> anyhow::Result<&'b mut LoxValue<'a>> {
     let err = format!("Usage of undeclared variable `{}`", name);
     let stack = state.vars.get_mut(state.current_fn.get_name()).unwrap();
-    
-    for hm in stack.iter_mut().rev(){
+
+    for hm in stack.iter_mut().rev() {
         if hm.contains_key(name) {
             return Ok(hm.get_mut(name).unwrap());
         }
@@ -119,10 +121,12 @@ fn get_var_from_env<'a, 'b>(
 
 fn gen_var_decl(id: &str, rval: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     let lox_value = gen_expr(rval, ast, state)?;
-    let src = state.builder.build_load(state.lox_value, lox_value.ptr, "copy")?;
+    let src = state
+        .builder
+        .build_load(state.lox_value, lox_value.ptr, "copy")?;
     let dst = gen_alloc_lox_value(LoxValueType::Nil, state)?;
-    state.builder.build_store(dst.ptr,src)?;
-    get_current_env(state).insert(id.to_owned(),dst); // if exist overwrites correctly
+    state.builder.build_store(dst.ptr, src)?;
+    get_current_env(state).insert(id.to_owned(), dst); // if exist overwrites correctly
     Ok(())
 }
 
@@ -146,7 +150,7 @@ fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> 
 }
 
 fn gen_block<'a>(name: &str, state: &mut State<'a>) -> BasicBlock<'a> {
-   state.ctx.append_basic_block(state.current_fn, name) 
+    state.ctx.append_basic_block(state.current_fn, name)
 }
 
 type VariableStack<'a> = Vec<HashMap<String, LoxValue<'a>>>;
