@@ -1,4 +1,4 @@
-use crate::ast::{Ast, Node, Operator};
+use crate::ast::{Ast, Node, NodeID, Operator};
 use crate::codegen::lox_value::{
     gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value, unwrap_bool,
 };
@@ -65,7 +65,7 @@ pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Re
             Operator::Minus => gen_num_neg(&ast.nodes[*node], ast, state),
             _ => unreachable!(),
         },
-        Node::Call => todo!(),
+        Node::Call(node, args) => gen_call(&ast.nodes[*node], args, ast, state),
         Node::Identifier(id) => get_var_from_env(id, state).cloned(),
         Node::Super(_) => todo!(),
         Node::Grouping(expr_id) => gen_expr(&ast.nodes[*expr_id], ast, state),
@@ -656,4 +656,25 @@ fn gen_and<'a>(
 
     state.builder.position_at_end(b_merge);
     Ok(result)
+}
+
+fn gen_call<'a>(
+    node: &Node,
+    args: &Vec<NodeID>,
+    ast: &Ast,
+    state: &mut State<'a>,
+) -> anyhow::Result<LoxValue<'a>> {
+    let id = match node {
+        Node::Identifier(id) => id,
+        _ => unreachable!(),
+    };
+    let lox_value = state.lox_value;
+    let call_args = args
+        .iter()
+        .map(|node_id| &ast.nodes[*node_id])
+        .map(|node| gen_expr(node, ast, state).unwrap().ptr).collect::<Vec<_>>().iter()
+        .map(|ptr| state.builder.build_load(lox_value, *ptr, "_").unwrap().into()).collect::<Vec<_>>();
+    let returned = state.builder.build_call(state.module.get_function(id).unwrap(), call_args.as_slice(), id)?;
+    let ptr = gen_alloc_lox_value(LoxValueType::Nil, state)?;
+    Ok(ptr)
 }

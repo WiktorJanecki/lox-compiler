@@ -70,7 +70,7 @@ pub enum Node {
     Assignment(Option<NodeID>, Id, NodeID), // Call node, lhs id, rhs expression
     Binary(NodeID, Operator, NodeID),
     Unary(NodeID, Operator),
-    Call, // TODO: store calle
+    Call(NodeID, Vec<NodeID>), // expr, expressions
     Identifier(Id),
     Super(Id),
     Grouping(NodeID), //expr

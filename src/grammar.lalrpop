@@ -214,8 +214,8 @@ Unary: ast::NodeID={
 };
 
 Call: ast::NodeID={
-    <Call> "(" Comma<Expr> ")" => 0,
-    <Call> "." <Identifier> => 0, // TODO: make action for these two, maybe store ID instead of node id
+    <Call> "(" <Comma<Expr>> ")" => ctx.push(Node::Call(<>, <>)),
+    <Call> "." <Identifier> => 0, // TODO: Methods
     <Primary>
 };
 
