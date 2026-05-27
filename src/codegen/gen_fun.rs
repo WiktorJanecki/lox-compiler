@@ -12,6 +12,7 @@ pub fn gen_fun_decl(
     state: &mut State,
 ) -> anyhow::Result<()> {
     let prev_fn = state.current_fn;
+    let prev_position = state.builder.get_insert_block().unwrap();
     let fun = state.module.add_function(
         id,
         state
@@ -47,6 +48,6 @@ pub fn gen_fun_decl(
     state.current_fn = prev_fn;
     state
         .builder
-        .position_at_end(state.current_fn.get_last_basic_block().unwrap());
+        .position_at_end(prev_position);
     Ok(())
 }
