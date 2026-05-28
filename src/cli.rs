@@ -21,6 +21,10 @@ pub struct Cli {
     #[clap(long, value_name = "EMITTING_TYPE")]
     #[arg(default_value = "exe")]
     pub emit: EmittingType,
+
+    /// Emit optimized code
+    #[clap(short = 'O')]
+    pub optimize: bool,
 }
 
 impl Cli {

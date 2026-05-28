@@ -7,7 +7,7 @@ pub type Id = String;
 // then instead of indexing something like stack based evaluation may be faster
 // TODO: investigate
 pub struct Ast {
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     pub program: Vec<NodeID>, // Vec<decl>
 }
 #[allow(clippy::new_without_default)] // we do not need that
@@ -26,6 +26,7 @@ impl Ast {
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub enum Operator {
     // Equality
     Eq,  // ==
@@ -43,6 +44,8 @@ pub enum Operator {
 
     // Logic
     Not,
+    Or,
+    And,
 }
 
 pub type NodeID = usize;
@@ -65,12 +68,7 @@ pub enum Node {
 
     // expressions
     Assignment(Option<NodeID>, Id, NodeID), // Call node, lhs id, rhs expression
-    LogicOr(NodeID, NodeID),
-    LogicAnd(NodeID, NodeID),
-    Equality(NodeID, Operator, NodeID),
-    Comparison(NodeID, Operator, NodeID),
-    Term(NodeID, Operator, NodeID),
-    Factor(NodeID, Operator, NodeID),
+    Binary(NodeID, Operator, NodeID),
     Unary(NodeID, Operator),
     Call, // TODO: store calle
     Identifier(Id),

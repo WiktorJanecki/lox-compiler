@@ -3,6 +3,11 @@ use crate::ast;
 use crate::ast::{Node, Operator};
 
 grammar<'a>(ctx: &'a mut ast::Ast);
+match {
+    r"\s*" => { },               // ignore ws
+    r"//[^\n\r]*[\n\r]*" => { }, // ignore comments
+    _                            // pass rest
+}
 
 pub Program: () = {
     <ds:Declaration*> => {
@@ -65,29 +70,86 @@ Stmt: ast::NodeID = {
         ctx.push(Node::ReturnStmt(nil))
     },
     <Expr> ";" => ctx.push(Node::ExprStmt(<>)),
-    "for" "(" <VarDecl> <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "(" <v:VarDecl> <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
+        }
+        else{
+            s
+        };
+        let while_stmt=  ctx.push(Node::WhileStmt(comp,body));
+        let for_decl = ctx.push(Node::Stmt(while_stmt));
+
+        ctx.push(Node::Block(vec![v,for_decl]))
     },
-    "for" "(" <Expr> ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "(" <v:Expr> ";" <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
+        }
+        else{
+            s
+        };
+        let while_stmt=  ctx.push(Node::WhileStmt(comp,body));
+        let for_decl = ctx.push(Node::Stmt(while_stmt));
+
+        let v_estmt = ctx.push(Node::ExprStmt(v));
+        let v_stmt = ctx.push(Node::Stmt(v_estmt));
+
+        ctx.push(Node::Block(vec![v_stmt,for_decl]))
     },
-    "for" "("  ";" <Expr?> ";" <Expr?> ")" <Stmt> => {
-       // TODO add desugared while loop
-       0
+    "for" "("  ";" <c:Expr?> ";" <p:Expr?> ")" <s:Stmt> => {
+        // TODO: refactor into function
+        let comp = if let Some(unw) = c{
+            unw
+        }
+        else{
+            ctx.push(Node::Bool(true))
+        };
+
+        let body = if let Some(p_unwrp) = p {
+            let s_stmt = ctx.push(Node::Stmt(s));
+            let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
+            let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
+        }
+        else{
+            s
+        };
+        ctx.push(Node::WhileStmt(comp,body))
     },
     "while" "(" <Expr> ")" <Stmt> => {
         ctx.push(Node::WhileStmt(<>,<>))
     },
     <Block>,
-    "if" "(" <e:Expr> ")" <s:Stmt> => {
-        ctx.push(Node::IfStmt(e, s, None))
-    },
-
-    #[precedence(level="1")] #[assoc(side="right")]
+    #[precedence(level="1")]#[assoc(side="right")]
     "if" "(" <e:Expr> ")" <s1:Stmt> "else" <s2:Stmt> => {
          ctx.push(Node::IfStmt(e, s1, Some(s2)))
+    },
+    #[precedence(level="2")]#[assoc(side="right")]
+    "if" "(" <e:Expr> ")" <s:Stmt> => {
+        ctx.push(Node::IfStmt(e, s, None))
     },
 };
 
@@ -104,38 +166,41 @@ Assignment: ast::NodeID ={
 };
 
 LogicOr: ast::NodeID = {
-    <LogicOr> "or" <LogicAnd> => ctx.push(Node::LogicOr(<>, <>)),
+    <LogicOr> "or" <LogicAnd> => ctx.push(Node::Binary(<>,Operator::Or, <>)),
     <LogicAnd>,
 };
 
 LogicAnd: ast::NodeID = {
-    <LogicAnd> "and" <Equality> => ctx.push(Node::LogicAnd(<>, <>)),
+    <LogicAnd> "and" <Equality> => ctx.push(Node::Binary(<>,Operator::And, <>)),
     <Equality>,
 };
 
 Equality: ast::NodeID={
-    <Equality> "==" <Comparison> => ctx.push(Node::Equality(<>, Operator::Eq, <>)),
-    <Equality> "!=" <Comparison> => ctx.push(Node::Equality(<>, Operator::Neq, <>)),
+    <Equality> "==" <Comparison> => ctx.push(Node::Binary(<>, Operator::Eq, <>)),
+    <Equality> "!=" <Comparison> => {
+        let eq = ctx.push(Node::Binary(<>, Operator::Eq, <>));
+        ctx.push(Node::Unary(eq, Operator::Not))
+    },
     <Comparison>,
 }
 
 Comparison: ast::NodeID={
-    <Comparison> ">=" <Term> => ctx.push(Node::Comparison(<>, Operator::Geq, <>)),
-    <Comparison> "<=" <Term> => ctx.push(Node::Comparison(<>, Operator::Leq, <>)),
-    <Comparison> "<" <Term> => ctx.push(Node::Comparison(<>, Operator::Less, <>)),
-    <Comparison> ">" <Term> => ctx.push(Node::Comparison(<>, Operator::Greater, <>)),
+    <Comparison> ">=" <Term> => ctx.push(Node::Binary(<>, Operator::Geq, <>)),
+    <Comparison> "<=" <Term> => ctx.push(Node::Binary(<>, Operator::Leq, <>)),
+    <Comparison> "<" <Term> => ctx.push(Node::Binary(<>, Operator::Less, <>)),
+    <Comparison> ">" <Term> => ctx.push(Node::Binary(<>, Operator::Greater, <>)),
     <Term>,
 }
 
 Term: ast::NodeID={
-    <Term> "+" <Factor> => ctx.push(Node::Term(<>, Operator::Plus, <>)),
-    <Term> "-" <Factor> => ctx.push(Node::Term(<>, Operator::Minus, <>)),
+    <Term> "+" <Factor> => ctx.push(Node::Binary(<>, Operator::Plus, <>)),
+    <Term> "-" <Factor> => ctx.push(Node::Binary(<>, Operator::Minus, <>)),
     <Factor>,
 }
 
 Factor: ast::NodeID={
-    <Factor> "*" <Unary> => ctx.push(Node::Factor(<>, Operator::Mul, <>)),
-    <Factor> "/" <Unary> => ctx.push(Node::Factor(<>, Operator::Div, <>)),
+    <Factor> "*" <Unary> => ctx.push(Node::Binary(<>, Operator::Mul, <>)),
+    <Factor> "/" <Unary> => ctx.push(Node::Binary(<>, Operator::Div, <>)),
     <Unary>,
 }
 
