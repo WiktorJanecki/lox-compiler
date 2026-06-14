@@ -86,11 +86,16 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     let false_block = state.ctx.append_basic_block(parent_func, "print.bool.fals");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
 
+    let obj_block = state.ctx.append_basic_block(parent_func, "print.obj");
+
     let cases = &[
         (LoxValueType::Nil.llvm_int(state.ctx), nil_block),
         (LoxValueType::Number.llvm_int(state.ctx), num_block),
         (LoxValueType::Bool.llvm_int(state.ctx), bool_block),
         (LoxValueType::String.llvm_int(state.ctx), str_block),
+        (LoxValueType::Closure.llvm_int(state.ctx), obj_block),
+        (LoxValueType::Instance.llvm_int(state.ctx), obj_block),
+        (LoxValueType::Class.llvm_int(state.ctx), obj_block),
     ];
     assert_eq!(cases.len(), LoxValueType::SIZE as usize);
 
@@ -100,54 +105,47 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     state.builder.build_unreachable()?;
 
     state.builder.position_at_end(nil_block);
-
     let nil_literal = global_string_literal(StringLiterals::PrintfNil, state);
-    state
-        .builder
-        .build_call(printf, &[nil_literal.into()], "printf")?;
+    state.builder.build_call(printf, &[nil_literal.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(bool_block);
-
     let bool_type = state.ctx.bool_type();
     let bool_val = state
         .builder
         .build_load(bool_type, union_ptr, "bool")?
         .into_int_value();
-    state
-        .builder
-        .build_conditional_branch(bool_val, true_block, false_block)?;
+    state.builder.build_conditional_branch(bool_val, true_block, false_block)?;
 
     state.builder.position_at_end(true_block);
     let true_literal = global_string_literal(StringLiterals::PrintfTrue, state);
-    state
-        .builder
-        .build_call(printf, &[true_literal.into()], "printf")?;
+    state.builder.build_call(printf, &[true_literal.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(false_block);
     let false_literal = global_string_literal(StringLiterals::PrintfFalse, state);
-    state
-        .builder
-        .build_call(printf, &[false_literal.into()], "printf")?;
+    state.builder.build_call(printf, &[false_literal.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(num_block);
     let float_literal = global_string_literal(StringLiterals::PrintfNumber, state);
     let float_type = state.ctx.f64_type();
     let float_val = state.builder.build_load(float_type, union_ptr, "float")?;
-    state
-        .builder
-        .build_call(printf, &[float_literal.into(), float_val.into()], "printf")?;
+    state.builder.build_call(printf, &[float_literal.into(), float_val.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(str_block);
     let str_literal = global_string_literal(StringLiterals::PrintfString, state);
     let str_type = state.ctx.ptr_type(AddressSpace::default());
     let str_val = state.builder.build_load(str_type, union_ptr, "str_val")?;
-    state
-        .builder
-        .build_call(printf, &[str_literal.into(), str_val.into()], "printf")?;
+    state.builder.build_call(printf, &[str_literal.into(), str_val.into()], "printf")?;
+    state.builder.build_unconditional_branch(merge_block)?;
+
+    // closures, instances and classes just print their tag label
+    state.builder.position_at_end(obj_block);
+    let str_fmt = global_string_literal(StringLiterals::PrintfString, state);
+    let obj_str = state.builder.build_global_string_ptr("<object>", "obj_str")?.as_pointer_value();
+    state.builder.build_call(printf, &[str_fmt.into(), obj_str.into()], "printf")?;
     state.builder.build_unconditional_branch(merge_block)?;
 
     state.builder.position_at_end(merge_block);

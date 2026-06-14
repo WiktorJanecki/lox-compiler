@@ -8,10 +8,9 @@ fn add_number() -> anyhow::Result<()> {
 }
 #[test]
 fn add_string() -> anyhow::Result<()> {
-    // TODO: uncomment
-    // assert_output("print \"sugon\" + \"deez\";", "sugondeez")?;
-    // assert_output("print \"sugon\" + \"deez\" + \"nats\";", "sugondeeznats")?;
-
+    assert_output("print \"sugon\" + \"deez\";", "sugondeez")?;
+    assert_output("print \"sugon\" + \"deez\" + \"nats\";", "sugondeeznats")?;
+    assert_output("print \"\" + \"hello\";", "hello")?;
     Ok(())
 }
 
@@ -194,7 +193,11 @@ fn equality_nil() -> anyhow::Result<()> {
 }
 #[test]
 fn equality_str() -> anyhow::Result<()> {
-    // TODO finish
+    assert_output("print \"abc\" == \"abc\";", "true")?;
+    assert_output("print \"abc\" == \"xyz\";", "false")?;
+    assert_output("print \"\" == \"\";", "true")?;
+    assert_output("print \"abc\" != \"abc\";", "false")?;
+    assert_output("print \"abc\" != \"xyz\";", "true")?;
     Ok(())
 }
 

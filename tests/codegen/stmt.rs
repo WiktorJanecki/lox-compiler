@@ -4,11 +4,11 @@ use crate::mock_print::{assert_output, assert_output_f64, should_runtime_error};
 fn if_true() -> anyhow::Result<()> {
     assert_output(
         "
-        print \"ba\"; 
+        print \"ba\";
         if (true)
-           print \"pka\"; 
+           print \"pka\";
         ",
-        "pka",
+        "ba\npka",
     )?;
     Ok(())
 }
@@ -35,7 +35,7 @@ fn if_else_true() -> anyhow::Result<()> {
         else
            print \"ma\";
         ",
-        "pka",
+        "ba\npka",
     )?;
     Ok(())
 }
@@ -50,7 +50,7 @@ fn if_else_false() -> anyhow::Result<()> {
         else
            print \"ma\";
         ",
-        "ma",
+        "ba\nma",
     )?;
     Ok(())
 }

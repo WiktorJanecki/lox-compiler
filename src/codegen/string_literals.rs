@@ -18,6 +18,10 @@ pub enum StringLiterals {
     ReDivUnsupportedType,
     ReComparisonUnsupportedType,
     ReLogicUnsupportedType,
+    ReCallNotCallable,
+    ReNotAnInstance,
+    ReUndefinedProperty,
+    ReUndefinedMethod,
 
     #[allow(clippy::upper_case_acronyms)]
     SIZE,
@@ -51,6 +55,10 @@ fn literal_to_message(variant: StringLiterals) -> &'static str {
         StringLiterals::ReLogicUnsupportedType => {
             "Runtime error: Only booleans can be used in logical operators\n"
         }
+        StringLiterals::ReCallNotCallable => "Runtime error: Can only call functions\n",
+        StringLiterals::ReNotAnInstance => "Runtime error: Only instances have properties\n",
+        StringLiterals::ReUndefinedProperty => "Runtime error: Undefined property\n",
+        StringLiterals::ReUndefinedMethod => "Runtime error: Undefined method\n",
         StringLiterals::SIZE => unreachable!(),
     }
 }
