@@ -1,6 +1,6 @@
 use crate::ast::{Ast, Id, NodeID};
 use crate::codegen::gen_stmt::gen_statement;
-use crate::codegen::lox_value::{LoxValue};
+use crate::codegen::lox_value::LoxValue;
 use crate::codegen::{State, get_current_env, push_new_env};
 
 pub fn gen_fun_decl(
@@ -35,10 +35,7 @@ pub fn gen_fun_decl(
     }
     gen_statement(&ast.nodes[*body_id], ast, state)?;
     for block in fun.get_basic_blocks() {
-        if !block
-            .get_terminator()
-            .is_some()
-        {
+        if !block.get_terminator().is_some() {
             state.builder.position_at_end(block);
             let mut nil = state.lox_value.get_undef();
             nil = state

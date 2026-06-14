@@ -1,6 +1,8 @@
 use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool};
+use crate::codegen::lox_value::{
+    LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool,
+};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
 use crate::codegen::{State, gen_block, gen_declaration, pop_env, push_new_env};
 use inkwell::AddressSpace;
@@ -20,7 +22,9 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
             gen_print_stmt(lox_val, state)
         }
         Node::ReturnStmt(node_id) => gen_return(*node_id, ast, state),
-        Node::WhileStmt(expr_id, stmt_id) => gen_while(&ast.nodes[*expr_id], &ast.nodes[*stmt_id], ast, state),
+        Node::WhileStmt(expr_id, stmt_id) => {
+            gen_while(&ast.nodes[*expr_id], &ast.nodes[*stmt_id], ast, state)
+        }
         Node::Block(decls) => {
             push_new_env(state)?;
             for decl in decls {
@@ -174,9 +178,13 @@ fn gen_while<'a>(expr: &Node, stmt: &Node, ast: &Ast, state: &mut State<'a>) -> 
 fn gen_return(node_id: NodeID, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
     let node = &ast.nodes[node_id];
     let expr = gen_expr(node, ast, state);
-    let ret_value = state.builder.build_load(state.lox_value ,expr?.ptr, "return")?;
+    let ret_value = state
+        .builder
+        .build_load(state.lox_value, expr?.ptr, "return")?;
     state.builder.build_return(Some(&ret_value))?;
-    let after_return_block = state.ctx.append_basic_block(state.current_fn, "after_return");
+    let after_return_block = state
+        .ctx
+        .append_basic_block(state.current_fn, "after_return");
     state.builder.position_at_end(after_return_block);
     Ok(())
 }

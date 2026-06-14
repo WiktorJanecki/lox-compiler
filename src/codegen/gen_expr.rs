@@ -672,10 +672,25 @@ fn gen_call<'a>(
     let call_args = args
         .iter()
         .map(|node_id| &ast.nodes[*node_id])
-        .map(|node| gen_expr(node, ast, state).unwrap().ptr).collect::<Vec<_>>().iter()
-        .map(|ptr| state.builder.build_load(lox_value, *ptr, "_").unwrap().into()).collect::<Vec<_>>();
-    let returned = state.builder.build_call(state.module.get_function(id).unwrap(), call_args.as_slice(), id)?;
+        .map(|node| gen_expr(node, ast, state).unwrap().ptr)
+        .collect::<Vec<_>>()
+        .iter()
+        .map(|ptr| {
+            state
+                .builder
+                .build_load(lox_value, *ptr, "_")
+                .unwrap()
+                .into()
+        })
+        .collect::<Vec<_>>();
+    let returned = state.builder.build_call(
+        state.module.get_function(id).unwrap(),
+        call_args.as_slice(),
+        id,
+    )?;
     let ptr = state.builder.build_alloca(state.lox_value, id)?;
-    state.builder.build_store(ptr, returned.try_as_basic_value().basic().unwrap())?;
-    Ok(LoxValue{ptr: ptr})
+    state
+        .builder
+        .build_store(ptr, returned.try_as_basic_value().basic().unwrap())?;
+    Ok(LoxValue { ptr: ptr })
 }
