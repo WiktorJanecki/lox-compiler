@@ -35,19 +35,25 @@ pub fn gen_fun_decl(
         id += 1;
     }
     gen_statement(&ast.nodes[*body_id], ast, state)?;
-    let mut nil = state.lox_value.get_undef();
-    nil = state
-        .builder
-        .build_insert_value(nil, state.ctx.i8_type().const_int(0, false), 0, "tag")?
-        .into_struct_value();
-    nil = state
-        .builder
-        .build_insert_value(nil, state.ctx.i64_type().const_int(0, false), 1, "tag")?
-        .into_struct_value();
-    state.builder.build_return(Some(&nil))?;
-    state.current_fn = prev_fn;
-    state
-        .builder
-        .position_at_end(prev_position);
+    for block in fun.get_basic_blocks() {
+        if !block
+            .get_terminator()
+            .is_some()
+        {
+            state.builder.position_at_end(block);
+            let mut nil = state.lox_value.get_undef();
+            nil = state
+                .builder
+                .build_insert_value(nil, state.ctx.i8_type().const_int(0, false), 0, "tag")?
+                .into_struct_value();
+            nil = state
+                .builder
+                .build_insert_value(nil, state.ctx.i64_type().const_int(0, false), 1, "tag")?
+                .into_struct_value();
+            state.builder.build_return(Some(&nil))?;
+        }
+        state.current_fn = prev_fn;
+        state.builder.position_at_end(prev_position);
+    }
     Ok(())
 }
