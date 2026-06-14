@@ -5,7 +5,7 @@ use crate::codegen::{State, get_current_env, push_new_env};
 
 pub fn gen_fun_decl(
     id: &Id,
-    args: &Vec<Id>,
+    args: &[Id],
     body_id: &NodeID,
     ast: &Ast,
     state: &mut State,
@@ -33,7 +33,7 @@ pub fn gen_fun_decl(
     }
     gen_statement(&ast.nodes[*body_id], ast, state)?;
     for block in fun.get_basic_blocks() {
-        if !block.get_terminator().is_some() {
+        if block.get_terminator().is_none() {
             state.builder.position_at_end(block);
             let mut nil = state.lox_value.get_undef();
             nil = state
