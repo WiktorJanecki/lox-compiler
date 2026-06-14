@@ -1,6 +1,7 @@
 use crate::ast;
 use crate::ast::{Ast, Node};
 use crate::codegen::gen_expr::gen_expr;
+use crate::codegen::gen_fun::gen_fun_decl;
 use crate::codegen::gen_stmt::gen_statement;
 use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_alloc_lox_value};
 use crate::codegen::string_literals::{
@@ -18,6 +19,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 mod gen_expr;
+mod gen_fun;
 mod gen_stmt;
 mod lox_value;
 mod string_literals;
@@ -134,7 +136,7 @@ fn gen_declaration(decl: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<
     match decl {
         Node::VarDecl(id, expr_id) => gen_var_decl(id, &ast.nodes[*expr_id], ast, state),
         Node::ClassDecl(_, _, _) => todo!(),
-        Node::FunDecl(_, _, _) => todo!(),
+        Node::FunDecl(id, args, body_id) => gen_fun_decl(id, args, body_id, ast, state),
         Node::Stmt(stmt_id) => gen_statement(&ast.nodes[*stmt_id], ast, state),
         _ => unreachable!("In program vector only decl nodes are pushed during parsing"),
     }
@@ -202,7 +204,6 @@ pub fn codegen(ast: ast::Ast, context: &'_ mut Context) -> anyhow::Result<Module
     // builder should be at @main.entry
     gen_return_zero(&mut state)?;
 
-    // println!("{}", state.module.to_string());
     if let Err(err) = state.module.verify() {
         eprintln!("Błąd weryfikacji IR: {}", err.to_string());
     }

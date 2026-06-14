@@ -21,7 +21,7 @@ pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Resul
             let lox_val = gen_expr(&ast.nodes[*expr_id], ast, state)?;
             gen_print_stmt(lox_val, state)
         }
-        Node::ReturnStmt(_) => todo!(),
+        Node::ReturnStmt(node_id) => gen_return(*node_id, ast, state),
         Node::WhileStmt(expr_id, stmt_id) => {
             gen_while(&ast.nodes[*expr_id], &ast.nodes[*stmt_id], ast, state)
         }
@@ -77,6 +77,7 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
         .expect("used after gen_extern_functions");
     let (tag_val, union_ptr) = gen_unpack_lox_value(&lox_val, state)?;
     let parent_func = state.current_fn;
+    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
     let nil_block = state.ctx.append_basic_block(parent_func, "print.nil");
     let num_block = state.ctx.append_basic_block(parent_func, "print.number");
     let str_block = state.ctx.append_basic_block(parent_func, "print.string");
@@ -84,7 +85,6 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     let true_block = state.ctx.append_basic_block(parent_func, "print.bool.true");
     let false_block = state.ctx.append_basic_block(parent_func, "print.bool.fals");
     let merge_block = state.ctx.append_basic_block(parent_func, "print.merge");
-    let unreach_block = state.ctx.append_basic_block(parent_func, "print.unreach");
 
     let cases = &[
         (LoxValueType::Nil.llvm_int(state.ctx), nil_block),
@@ -172,5 +172,19 @@ fn gen_while<'a>(expr: &Node, stmt: &Node, ast: &Ast, state: &mut State<'a>) -> 
     state.builder.build_unconditional_branch(b_check)?;
 
     state.builder.position_at_end(b_merge);
+    Ok(())
+}
+
+fn gen_return(node_id: NodeID, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
+    let node = &ast.nodes[node_id];
+    let expr = gen_expr(node, ast, state);
+    let ret_value = state
+        .builder
+        .build_load(state.lox_value, expr?.ptr, "return")?;
+    state.builder.build_return(Some(&ret_value))?;
+    let after_return_block = state
+        .ctx
+        .append_basic_block(state.current_fn, "after_return");
+    state.builder.position_at_end(after_return_block);
     Ok(())
 }
