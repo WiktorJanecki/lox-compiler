@@ -826,7 +826,7 @@ fn gen_call<'a>(
     let b_class = gen_block("call.class", state);
     let b_err = gen_block("call.err", state);
     let b_merge = gen_block("call.merge", state);
-    let result_ptr = state.builder.build_alloca(state.lox_value, "call.result")?;
+    let result_ptr = super::build_entry_block_alloca(state.lox_value, "call.result", state)?;
 
     let closure_tag = LoxValueType::Closure.llvm_int(state.ctx);
     let class_tag = LoxValueType::Class.llvm_int(state.ctx);
@@ -896,7 +896,7 @@ pub fn call_closure_value<'a>(
     let fn_type = state.lox_value.fn_type(&param_types, false);
 
     let returned = state.builder.build_indirect_call(fn_type, fn_ptr, &call_args, "call_ret")?;
-    let result_ptr = state.builder.build_alloca(state.lox_value, "call_result")?;
+    let result_ptr = super::build_entry_block_alloca(state.lox_value, "call_result", state)?;
     let ret_val = returned.try_as_basic_value().basic().unwrap();
     state.builder.build_store(result_ptr, ret_val)?;
     Ok(LoxValue { ptr: result_ptr })

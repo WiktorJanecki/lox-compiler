@@ -51,12 +51,13 @@ pub fn gen_unpack_lox_value<'a>(
     Ok((tag_val, union_ptr))
 }
 
-/// Stack-allocated LoxValue (for temporaries)
+/// Stack-allocated LoxValue (for temporaries).
+/// Alloca is hoisted to the function entry block to prevent stack overflow in loops.
 pub fn gen_alloc_lox_value<'a>(
     typee: LoxValueType,
     state: &mut State<'a>,
 ) -> anyhow::Result<LoxValue<'a>> {
-    let ptr = state.builder.build_alloca(state.lox_value, "lox_val_ptr")?;
+    let ptr = super::build_entry_block_alloca(state.lox_value, "lox_val", state)?;
     let index_ptr = state
         .builder
         .build_struct_gep(state.lox_value, ptr, 0, "index")?;

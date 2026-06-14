@@ -12,7 +12,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::BasicMetadataTypeEnum::PointerType;
-use inkwell::types::StructType;
+use inkwell::types::{BasicType, StructType};
 use inkwell::values::FunctionValue;
 use inkwell::{AddressSpace, values};
 use std::collections::HashMap;
@@ -187,6 +187,23 @@ fn gen_panic_call(msg: StringLiterals, state: &mut State) -> anyhow::Result<()> 
 
 fn gen_block<'a>(name: &str, state: &mut State<'a>) -> BasicBlock<'a> {
     state.ctx.append_basic_block(state.current_fn, name)
+}
+
+/// Build an alloca in the function entry block so loops don't grow the stack on every iteration.
+fn build_entry_block_alloca<'a, T: BasicType<'a>>(
+    ty: T,
+    name: &str,
+    state: &mut State<'a>,
+) -> anyhow::Result<inkwell::values::PointerValue<'a>> {
+    let current_block = state.builder.get_insert_block().unwrap();
+    let entry_block = state.current_fn.get_first_basic_block().unwrap();
+    match entry_block.get_first_instruction() {
+        Some(first) => state.builder.position_before(&first),
+        None => state.builder.position_at_end(entry_block),
+    }
+    let ptr = state.builder.build_alloca(ty, name)?;
+    state.builder.position_at_end(current_block);
+    Ok(ptr)
 }
 
 type VariableStack<'a> = Vec<HashMap<String, LoxValue<'a>>>;

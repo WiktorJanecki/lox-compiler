@@ -423,7 +423,7 @@ fn copy_env_loop<'a>(
     let b_body = gen_block("copy_body", state);
     let b_merge = gen_block("copy_merge", state);
 
-    let i = state.builder.build_alloca(i64_t, "copy_i")?;
+    let i = super::build_entry_block_alloca(i64_t, "copy_i", state)?;
     state.builder.build_store(i, i64_t.const_zero())?;
     state.builder.build_unconditional_branch(b_check)?;
 
