@@ -1,8 +1,7 @@
-use crate::ast::{Ast, Id, Node, NodeID};
+use crate::ast::{Ast, Id, NodeID};
 use crate::codegen::gen_stmt::gen_statement;
-use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_alloc_lox_value};
+use crate::codegen::lox_value::{LoxValue};
 use crate::codegen::{State, get_current_env, push_new_env};
-use std::os::linux::raw::stat;
 
 pub fn gen_fun_decl(
     id: &Id,

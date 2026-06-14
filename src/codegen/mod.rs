@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::ast::{Ast, Id, Node, NodeID};
+use crate::ast::{Ast, Node};
 use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::gen_fun::gen_fun_decl;
 use crate::codegen::gen_stmt::gen_statement;

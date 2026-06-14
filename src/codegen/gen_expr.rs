@@ -1,4 +1,3 @@
-use std::os::linux::raw::stat;
 use crate::ast::{Ast, Node, NodeID, Operator};
 use crate::codegen::lox_value::{
     gen_alloc_lox_value, gen_store_bool, gen_store_number, gen_unpack_lox_value, unwrap_bool,
@@ -8,7 +7,6 @@ use crate::codegen::{
     lox_index_type,
 };
 use inkwell::{FloatPredicate, IntPredicate};
-use inkwell::values::AnyValueEnum::StructValue;
 
 pub fn gen_expr<'a>(expr: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<LoxValue<'a>> {
     match expr {

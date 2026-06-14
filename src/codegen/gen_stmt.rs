@@ -1,6 +1,6 @@
 use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
-use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool, gen_alloc_lox_value};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
 use crate::codegen::{State, gen_block, gen_declaration, pop_env, push_new_env};
 use inkwell::AddressSpace;
