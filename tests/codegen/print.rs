@@ -23,6 +23,6 @@ fn print_nil() -> anyhow::Result<()> {
 
 #[test]
 fn print_string() -> anyhow::Result<()> {
-    assert_output("print \"mama\";","mama")?;
+    assert_output("print \"mama\";", "mama")?;
     Ok(())
 }

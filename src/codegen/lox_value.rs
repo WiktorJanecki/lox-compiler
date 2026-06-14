@@ -79,6 +79,7 @@ pub fn gen_store_number<'a>(
     Ok(())
 }
 
+#[allow(unused)] // TODO: check if necessary for string concat
 pub fn gen_store_string<'a>(
     var: &LoxValue<'a>,
     cstr: values::PointerValue<'a>,

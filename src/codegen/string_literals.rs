@@ -60,8 +60,9 @@ pub fn gen_global_string_literals<'a>(
 ) -> anyhow::Result<[values::PointerValue<'a>; StringLiterals::SIZE as usize]> {
     let mut arr = [None; StringLiterals::SIZE as usize];
 
+    #[allow(clippy::needless_range_loop)] // to avoid special enum create
     for i in 0..StringLiterals::SIZE as usize {
-        let mes = literal_to_message(unsafe { transmute(i) });
+        let mes = literal_to_message(unsafe { transmute::<usize, StringLiterals>(i) });
         let ptr = b
             .build_global_string_ptr(mes, "compiler_printf_literal")?
             .as_pointer_value();

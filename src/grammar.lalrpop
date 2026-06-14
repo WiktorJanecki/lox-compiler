@@ -83,8 +83,7 @@ Stmt: ast::NodeID = {
             let s_stmt = ctx.push(Node::Stmt(s));
             let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
             let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
-            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
-            body
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
         }
         else{
             s
@@ -107,8 +106,7 @@ Stmt: ast::NodeID = {
             let s_stmt = ctx.push(Node::Stmt(s));
             let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
             let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
-            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
-            body
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
         }
         else{
             s
@@ -134,8 +132,7 @@ Stmt: ast::NodeID = {
             let s_stmt = ctx.push(Node::Stmt(s));
             let p_exprstmt = ctx.push(Node::ExprStmt(p_unwrp));
             let p_stmt = ctx.push(Node::Stmt(p_exprstmt));
-            let body = ctx.push(Node::Block(vec![s_stmt, p_stmt]));
-            body
+            ctx.push(Node::Block(vec![s_stmt, p_stmt]))
         }
         else{
             s

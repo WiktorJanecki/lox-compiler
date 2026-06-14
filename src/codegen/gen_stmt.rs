@@ -2,7 +2,7 @@ use crate::ast::{Ast, Node, NodeID};
 use crate::codegen::gen_expr::gen_expr;
 use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_truthiness, gen_unpack_lox_value, unwrap_bool, gen_alloc_lox_value};
 use crate::codegen::string_literals::{StringLiterals, global_string_literal};
-use crate::codegen::{State, gen_declaration, pop_env, push_new_env, gen_block};
+use crate::codegen::{State, gen_block, gen_declaration, pop_env, push_new_env};
 use inkwell::AddressSpace;
 
 pub fn gen_statement(stmt: &Node, ast: &Ast, state: &mut State) -> anyhow::Result<()> {
@@ -149,12 +149,7 @@ fn gen_print_stmt<'a>(lox_val: LoxValue<'a>, state: &mut State<'a>) -> anyhow::R
     state.builder.position_at_end(merge_block);
     Ok(())
 }
-fn gen_while<'a>(
-    expr: &Node,
-    stmt: &Node,
-    ast: &Ast,
-    state: &mut State<'a>,
-) -> anyhow::Result<()> {
+fn gen_while<'a>(expr: &Node, stmt: &Node, ast: &Ast, state: &mut State<'a>) -> anyhow::Result<()> {
     let b_check = gen_block("check", state);
     let b_body = gen_block("body", state);
     let b_merge = gen_block("merge", state);
@@ -163,11 +158,13 @@ fn gen_while<'a>(
 
     state.builder.position_at_end(b_check);
     let eval = gen_expr(expr, ast, state)?;
-    let truth = unwrap_bool(&eval,state)?;
-    state.builder.build_conditional_branch(truth, b_body, b_merge)?;
+    let truth = unwrap_bool(&eval, state)?;
+    state
+        .builder
+        .build_conditional_branch(truth, b_body, b_merge)?;
 
     state.builder.position_at_end(b_body);
-    gen_statement(stmt,ast,state)?;
+    gen_statement(stmt, ast, state)?;
     state.builder.build_unconditional_branch(b_check)?;
 
     state.builder.position_at_end(b_merge);

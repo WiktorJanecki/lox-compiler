@@ -2,8 +2,8 @@ use inkwell::context::Context;
 use loxc::ast::Ast;
 use loxc::codegen::codegen;
 
-mod mock_print;
 mod expr;
+mod mock_print;
 mod print;
 mod stmt;
 
