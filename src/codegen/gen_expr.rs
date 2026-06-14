@@ -660,7 +660,7 @@ fn gen_and<'a>(
 
 fn gen_call<'a>(
     node: &Node,
-    args: &Vec<NodeID>,
+    args: &[NodeID],
     ast: &Ast,
     state: &mut State<'a>,
 ) -> anyhow::Result<LoxValue<'a>> {
@@ -692,5 +692,5 @@ fn gen_call<'a>(
     state
         .builder
         .build_store(ptr, returned.try_as_basic_value().basic().unwrap())?;
-    Ok(LoxValue { ptr: ptr })
+    Ok(LoxValue { ptr })
 }

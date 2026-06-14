@@ -25,13 +25,11 @@ pub fn gen_fun_decl(
     state.vars.insert(fun.get_name().into(), Vec::new());
     push_new_env(state)?;
     let lox_value = state.lox_value;
-    let mut id = 0;
-    for arg in args {
-        let arg_val = fun.get_nth_param(id).unwrap().into_struct_value();
+    for (id, arg) in args.iter().enumerate() {
+        let arg_val = fun.get_nth_param(id as u32).unwrap().into_struct_value();
         let arg_alloca = state.builder.build_alloca(lox_value, arg).unwrap();
         state.builder.build_store(arg_alloca, arg_val)?;
         get_current_env(state).insert(arg.into(), LoxValue { ptr: arg_alloca });
-        id += 1;
     }
     gen_statement(&ast.nodes[*body_id], ast, state)?;
     for block in fun.get_basic_blocks() {
