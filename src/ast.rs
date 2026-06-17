@@ -71,7 +71,7 @@ pub enum Node {
     Binary(NodeID, Operator, NodeID),
     Unary(NodeID, Operator),
     Call(NodeID, Vec<NodeID>), // expr, expressions
-    Get(NodeID, Id),          // object, field/method name
+    Get(NodeID, Id),           // object, field/method name
     Identifier(Id),
     Super(Id),
     Grouping(NodeID), //expr

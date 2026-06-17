@@ -1,8 +1,6 @@
 use crate::ast::{Ast, Id, Node, NodeID};
 use crate::codegen::gen_stmt::gen_statement;
-use crate::codegen::lox_value::{
-    LoxValue, LoxValueType, gen_alloc_heap_lox_value, gen_store_ptr,
-};
+use crate::codegen::lox_value::{LoxValue, LoxValueType, gen_alloc_heap_lox_value, gen_store_ptr};
 use crate::codegen::{State, get_current_env, get_var_from_env, push_new_env};
 use inkwell::AddressSpace;
 use std::collections::HashSet;
@@ -11,7 +9,12 @@ use std::collections::HashSet;
 /// that are NOT in `bound` (i.e., free variables).
 /// Also handles nested FunDecl: the nested function's params are bound inside it,
 /// and its name is bound in the outer scope after the declaration.
-pub fn collect_free_vars(node_id: NodeID, ast: &Ast, bound: &mut HashSet<String>, free: &mut Vec<String>) {
+pub fn collect_free_vars(
+    node_id: NodeID,
+    ast: &Ast,
+    bound: &mut HashSet<String>,
+    free: &mut Vec<String>,
+) {
     match &ast.nodes[node_id] {
         Node::Identifier(id) => {
             if !bound.contains(id) && !free.contains(id) {
@@ -164,15 +167,26 @@ fn gen_fun_decl_inner(
     // set up captured variable access (load LoxValue* from env[i])
     for (i, var_name) in free_vars.iter().enumerate() {
         let slot = unsafe {
-            state.builder.build_gep(ptr_t, env_param, &[i64_t.const_int(i as u64, false)], "env_slot")?
+            state.builder.build_gep(
+                ptr_t,
+                env_param,
+                &[i64_t.const_int(i as u64, false)],
+                "env_slot",
+            )?
         };
-        let captured_ptr = state.builder.build_load(ptr_t, slot, var_name)?.into_pointer_value();
+        let captured_ptr = state
+            .builder
+            .build_load(ptr_t, slot, var_name)?
+            .into_pointer_value();
         get_current_env(state).insert(var_name.clone(), LoxValue { ptr: captured_ptr });
     }
 
     // set up parameters (skip index 0 = env pointer)
     for (i, arg_name) in args.iter().enumerate() {
-        let arg_val = fun.get_nth_param((i + 1) as u32).unwrap().into_struct_value();
+        let arg_val = fun
+            .get_nth_param((i + 1) as u32)
+            .unwrap()
+            .into_struct_value();
         let arg_ptr = gen_alloc_heap_lox_value(LoxValueType::Nil, state)?;
         state.builder.build_store(arg_ptr.ptr, arg_val)?;
         get_current_env(state).insert(arg_name.clone(), arg_ptr);
@@ -208,16 +222,24 @@ fn gen_fun_decl_inner(
     // allocate env array and fill with pointers to captured vars
     let env_arr_ptr = if n_env > 0 {
         let ptr_size = i64_t.const_int(8, false);
-        let env_arr_size = state.builder.build_int_mul(
-            i64_t.const_int(n_env, false),
-            ptr_size,
-            "env_arr_size",
-        )?;
-        let env_arr = state.builder.build_call(malloc, &[env_arr_size.into()], "env_arr")?
-            .try_as_basic_value().basic().unwrap().into_pointer_value();
+        let env_arr_size =
+            state
+                .builder
+                .build_int_mul(i64_t.const_int(n_env, false), ptr_size, "env_arr_size")?;
+        let env_arr = state
+            .builder
+            .build_call(malloc, &[env_arr_size.into()], "env_arr")?
+            .try_as_basic_value()
+            .basic()
+            .unwrap()
+            .into_pointer_value();
         for (i, var_name) in free_vars.iter().enumerate() {
             let idx = i64_t.const_int(i as u64, false);
-            let slot = unsafe { state.builder.build_gep(ptr_t, env_arr, &[idx], "env_slot")? };
+            let slot = unsafe {
+                state
+                    .builder
+                    .build_gep(ptr_t, env_arr, &[idx], "env_slot")?
+            };
             // null placeholder for: (a) methods' this slot, (b) self-recursive reference
             let ptr_to_store = if (is_method && i == 0) || self_ref_idx == Some(i) {
                 ptr_t.const_null()
@@ -233,16 +255,29 @@ fn gen_fun_decl_inner(
 
     // allocate closure struct: { fn_ptr, env_arr, n_env }
     let closure_size = state.closure_type.size_of().unwrap();
-    let closure_mem = state.builder.build_call(malloc, &[closure_size.into()], "closure_mem")?
-        .try_as_basic_value().basic().unwrap().into_pointer_value();
+    let closure_mem = state
+        .builder
+        .build_call(malloc, &[closure_size.into()], "closure_mem")?
+        .try_as_basic_value()
+        .basic()
+        .unwrap()
+        .into_pointer_value();
 
     let fn_ptr = fun.as_global_value().as_pointer_value();
-    let fp_field = state.builder.build_struct_gep(state.closure_type, closure_mem, 0, "fp_f")?;
+    let fp_field = state
+        .builder
+        .build_struct_gep(state.closure_type, closure_mem, 0, "fp_f")?;
     state.builder.build_store(fp_field, fn_ptr)?;
-    let env_field = state.builder.build_struct_gep(state.closure_type, closure_mem, 1, "env_f")?;
+    let env_field = state
+        .builder
+        .build_struct_gep(state.closure_type, closure_mem, 1, "env_f")?;
     state.builder.build_store(env_field, env_arr_ptr)?;
-    let ne_field = state.builder.build_struct_gep(state.closure_type, closure_mem, 2, "ne_f")?;
-    state.builder.build_store(ne_field, i64_t.const_int(n_env, false))?;
+    let ne_field = state
+        .builder
+        .build_struct_gep(state.closure_type, closure_mem, 2, "ne_f")?;
+    state
+        .builder
+        .build_store(ne_field, i64_t.const_int(n_env, false))?;
 
     // create LoxValue(Closure) and register in current scope
     let closure_lox = gen_alloc_heap_lox_value(LoxValueType::Closure, state)?;
@@ -252,7 +287,11 @@ fn gen_fun_decl_inner(
     // patch self-reference slot so the function can call itself recursively
     if let Some(self_i) = self_ref_idx {
         let idx = i64_t.const_int(self_i as u64, false);
-        let self_slot = unsafe { state.builder.build_gep(ptr_t, env_arr_ptr, &[idx], "self_slot")? };
+        let self_slot = unsafe {
+            state
+                .builder
+                .build_gep(ptr_t, env_arr_ptr, &[idx], "self_slot")?
+        };
         let self_ptr = get_var_from_env(id, state)?.ptr;
         state.builder.build_store(self_slot, self_ptr)?;
     }

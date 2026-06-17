@@ -32,21 +32,53 @@ fn gen_extern_functions(module: &Module) {
     let i64_t = context.i64_type();
 
     // printf(fmt, ...) -> i32
-    module.add_function("printf", i32_t.fn_type(&[PointerType(ptr)], true), Some(Linkage::External));
+    module.add_function(
+        "printf",
+        i32_t.fn_type(&[PointerType(ptr)], true),
+        Some(Linkage::External),
+    );
     // exit(code: i32)
-    module.add_function("exit", context.void_type().fn_type(&[i32_t.into()], false), Some(Linkage::External));
+    module.add_function(
+        "exit",
+        context.void_type().fn_type(&[i32_t.into()], false),
+        Some(Linkage::External),
+    );
     // malloc(size: i64) -> ptr
-    module.add_function("malloc", ptr.fn_type(&[i64_t.into()], false), Some(Linkage::External));
+    module.add_function(
+        "malloc",
+        ptr.fn_type(&[i64_t.into()], false),
+        Some(Linkage::External),
+    );
     // realloc(ptr, i64) -> ptr
-    module.add_function("realloc", ptr.fn_type(&[ptr.into(), i64_t.into()], false), Some(Linkage::External));
+    module.add_function(
+        "realloc",
+        ptr.fn_type(&[ptr.into(), i64_t.into()], false),
+        Some(Linkage::External),
+    );
     // strlen(s: ptr) -> i64
-    module.add_function("strlen", i64_t.fn_type(&[ptr.into()], false), Some(Linkage::External));
+    module.add_function(
+        "strlen",
+        i64_t.fn_type(&[ptr.into()], false),
+        Some(Linkage::External),
+    );
     // strcpy(dst: ptr, src: ptr) -> ptr
-    module.add_function("strcpy", ptr.fn_type(&[ptr.into(), ptr.into()], false), Some(Linkage::External));
+    module.add_function(
+        "strcpy",
+        ptr.fn_type(&[ptr.into(), ptr.into()], false),
+        Some(Linkage::External),
+    );
     // strcat(dst: ptr, src: ptr) -> ptr
-    module.add_function("strcat", ptr.fn_type(&[ptr.into(), ptr.into()], false), Some(Linkage::External));
+    module.add_function(
+        "strcat",
+        ptr.fn_type(&[ptr.into(), ptr.into()], false),
+        Some(Linkage::External),
+    );
     // strcmp(s1: ptr, s2: ptr) -> i32
-    module.add_function("strcmp", i32_t.fn_type(&[ptr.into(), ptr.into()], false), Some(Linkage::External));
+    module.add_function(
+        "strcmp",
+        i32_t.fn_type(&[ptr.into(), ptr.into()], false),
+        Some(Linkage::External),
+    );
 }
 
 fn gen_panic_fn<'a>(module: &Module<'a>, builder: &Builder) -> anyhow::Result<FunctionValue<'a>> {
@@ -84,13 +116,25 @@ fn gen_closure_struct(ctx: &'_ Context) -> StructType<'_> {
 /// LoxInstance: { class: ptr, n_fields: i64, field_names: ptr (char**), fields: ptr (LoxValue**) }
 fn gen_instance_struct(ctx: &'_ Context) -> StructType<'_> {
     let ptr = ctx.ptr_type(AddressSpace::default());
-    ctx.struct_type(&[ptr.into(), ctx.i64_type().into(), ptr.into(), ptr.into()], false)
+    ctx.struct_type(
+        &[ptr.into(), ctx.i64_type().into(), ptr.into(), ptr.into()],
+        false,
+    )
 }
 
 /// LoxClass: { name: ptr (char*), superclass: ptr (LoxClass*), n_methods: i64, method_names: ptr (char**), methods: ptr (LoxValue**) }
 fn gen_class_struct(ctx: &'_ Context) -> StructType<'_> {
     let ptr = ctx.ptr_type(AddressSpace::default());
-    ctx.struct_type(&[ptr.into(), ptr.into(), ctx.i64_type().into(), ptr.into(), ptr.into()], false)
+    ctx.struct_type(
+        &[
+            ptr.into(),
+            ptr.into(),
+            ctx.i64_type().into(),
+            ptr.into(),
+            ptr.into(),
+        ],
+        false,
+    )
 }
 
 fn gen_begin_main(state: &mut State) {

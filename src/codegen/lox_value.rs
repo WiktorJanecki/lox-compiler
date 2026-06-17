@@ -74,8 +74,13 @@ pub fn gen_alloc_heap_lox_value<'a>(
 ) -> anyhow::Result<LoxValue<'a>> {
     let malloc_fn = state.module.get_function("malloc").unwrap();
     let size = state.lox_value.size_of().unwrap();
-    let ptr = state.builder.build_call(malloc_fn, &[size.into()], "heap_lox")?
-        .try_as_basic_value().basic().unwrap().into_pointer_value();
+    let ptr = state
+        .builder
+        .build_call(malloc_fn, &[size.into()], "heap_lox")?
+        .try_as_basic_value()
+        .basic()
+        .unwrap()
+        .into_pointer_value();
     let index_ptr = state
         .builder
         .build_struct_gep(state.lox_value, ptr, 0, "index")?;
@@ -152,8 +157,12 @@ pub fn gen_store_ptr<'a>(
     let union_ptr = state
         .builder
         .build_struct_gep(state.lox_value, var.ptr, 1, "union_ptr")?;
-    state.builder.build_store(index_ptr, tag.llvm_int(state.ctx))?;
-    let as_int = state.builder.build_ptr_to_int(obj_ptr, state.ctx.i64_type(), "ptr_as_i64")?;
+    state
+        .builder
+        .build_store(index_ptr, tag.llvm_int(state.ctx))?;
+    let as_int = state
+        .builder
+        .build_ptr_to_int(obj_ptr, state.ctx.i64_type(), "ptr_as_i64")?;
     state.builder.build_store(union_ptr, as_int)?;
     Ok(())
 }
