@@ -16,7 +16,8 @@ Project made for university course by:
 
 Lox is functional and objective script language designed by Robert Nystrom in his book - Crafting Interpreters. 
 
-### Lot of tests
+### Tests
+Project is heavly tested. Tens of tests for every edge case f.ex dangling else or lox specification related things
 ![Tests](./tests.png)
 
 ## Syntax Grammar
