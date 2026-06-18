@@ -8,9 +8,16 @@ Project made for university course by:
 
 ## Project description
 
-**Lox** to **LLVM compiler** written in **Rust** using [**LALRPOP**](https://github.com/lalrpop/lalrpop) parser generator.
+- input - Lox
+- output - LLVM
+- parser generator - [**LALRPOP**](https://github.com/lalrpop/lalrpop)
+- language of implementation - Rust
+- error handling - runtime errors (e.g. adding string and number), compile-time errors (e.g. using undeclared variable), parsing errors 
 
 Lox is functional and objective script language designed by Robert Nystrom in his book - Crafting Interpreters. 
+
+### Lot of tests
+![Tests](./tests.png)
 
 ## Syntax Grammar
 Parser generator file: [grammar.lalrpop](src/grammar.lalrpop)
