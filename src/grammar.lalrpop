@@ -212,7 +212,7 @@ Unary: ast::NodeID={
 
 Call: ast::NodeID={
     <Call> "(" <Comma<Expr>> ")" => ctx.push(Node::Call(<>, <>)),
-    <Call> "." <Identifier> => 0, // TODO: Methods
+    <Call> "." <Identifier> => ctx.push(Node::Get(<>, <>)),
     <Primary>
 };
 

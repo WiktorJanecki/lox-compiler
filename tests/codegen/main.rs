@@ -3,7 +3,9 @@ use loxc::ast::Ast;
 use loxc::codegen::codegen;
 
 mod expr;
+mod fun;
 mod mock_print;
+mod oop;
 mod print;
 mod stmt;
 
